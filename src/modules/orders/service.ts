@@ -310,6 +310,10 @@ export class OrderService {
       reason: 'user_cancelled',
     });
     metrics.ordersTotal.inc({ status: 'CANCELLED' });
+    await this.deps.pubsub.publish(`order:${updated._id}`, {
+      type: 'order.status',
+      status: 'CANCELLED',
+    });
     return serializeOrder(updated);
   }
 

@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import type { AppDeps } from '../../app.ts';
+import { openSseStream } from '../../debug/sse.ts';
 import { requireRole } from '../../middleware/auth.ts';
 import { validate, validated } from '../../middleware/validate.ts';
 import { buildEnvelope } from '../../shared/http.ts';
-import { badRequest } from '../../shared/problem.ts';
+import { badRequest, notFound } from '../../shared/problem.ts';
 import { pathParam } from '../../shared/request.ts';
 import { audit } from '../audit/service.ts';
 import {
@@ -73,6 +74,26 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
         return;
       }
       res.json(result.body);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/:id/stream', async (req, res, next) => {
+    try {
+      const event = await deps.collections.events.findOne({
+        _id: pathParam(req, 'id'),
+        deletedAt: null,
+      });
+      if (!event) throw notFound('Event not found');
+      await openSseStream({
+        req,
+        res,
+        subscriber: deps.subscriber,
+        channel: `stock:${event._id}`,
+        label: 'stock',
+        lastEventId: req.header('last-event-id'),
+      });
     } catch (error) {
       next(error);
     }
