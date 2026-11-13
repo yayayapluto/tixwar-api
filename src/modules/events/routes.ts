@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { AppDeps } from '../../app.ts';
 import { openSseStream } from '../../debug/sse.ts';
 import { requireRole } from '../../middleware/auth.ts';
+import { clientIp } from '../../middleware/rateLimit.ts';
 import { validate, validated } from '../../middleware/validate.ts';
 import { buildEnvelope } from '../../shared/http.ts';
 import { badRequest, notFound } from '../../shared/problem.ts';
@@ -25,6 +26,7 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
 
   router.get(
     '/',
+    deps.rateLimiters.middleware('anon-browse', clientIp),
     validate({ query: eventListQueryGuard }),
     validate({ query: eventListQuerySchema }),
     async (req, res, next) => {

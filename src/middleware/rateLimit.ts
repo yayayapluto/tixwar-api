@@ -47,6 +47,7 @@ interface ConsumeResult {
   limit: number;
   resetSeconds: number;
   usedFallback: boolean;
+  limited: boolean;
 }
 
 const consume = async (
@@ -63,15 +64,17 @@ const consume = async (
       limit: points,
       resetSeconds: Math.max(1, Math.ceil(result.msBeforeNext / 1000)),
       usedFallback: false,
+      limited: false,
     };
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'remainingPoints' in error) {
       const rejected = error as { remainingPoints: number; msBeforeNext: number };
       return {
-        remaining: rejected.remainingPoints,
+        remaining: 0,
         limit: points,
         resetSeconds: Math.max(1, Math.ceil(rejected.msBeforeNext / 1000)),
         usedFallback: false,
+        limited: true,
       };
     }
     metrics.rateLimitFallbackTotal.inc();
@@ -83,17 +86,19 @@ const consume = async (
         limit: fallback.points,
         resetSeconds: Math.max(1, Math.ceil(result.msBeforeNext / 1000)),
         usedFallback: true,
+        limited: false,
       };
     } catch (fallbackError) {
       const rejected = fallbackError as { remainingPoints: number; msBeforeNext: number };
       return {
-        remaining: rejected.remainingPoints ?? 0,
+        remaining: 0,
         limit: fallback.points,
         resetSeconds: Math.max(
           1,
           Math.ceil((rejected.msBeforeNext ?? durationSeconds * 1000) / 1000),
         ),
         usedFallback: true,
+        limited: true,
       };
     }
   }
@@ -137,7 +142,7 @@ export const createRateLimiters = (env: Env, redis: Redis): RateLimiterSet => {
       res.setHeader('RateLimit-Limit', String(outcome.limit));
       res.setHeader('RateLimit-Remaining', String(Math.max(0, outcome.remaining)));
       res.setHeader('RateLimit-Reset', String(outcome.resetSeconds));
-      if (outcome.remaining < 0) {
+      if (outcome.limited) {
         metrics.rateLimitRejectedTotal.inc({ tier });
         res.setHeader('Retry-After', String(outcome.resetSeconds));
         next(rateLimited(`Rate limit exceeded for ${tier}`, outcome.resetSeconds));

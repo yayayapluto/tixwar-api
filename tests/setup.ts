@@ -26,6 +26,7 @@ const TEST_DEFAULTS: Record<string, string> = {
   RATE_LIMIT_PAY_USER: '1000',
   RATE_LIMIT_ANON: '100000',
   RATE_LIMIT_GLOBAL: '100000',
+  RATE_LIMIT_LOGIN: '1000',
 };
 
 const FORCE_OVERRIDE = new Set([
@@ -45,6 +46,7 @@ const FORCE_OVERRIDE = new Set([
   'RATE_LIMIT_PAY_USER',
   'RATE_LIMIT_ANON',
   'RATE_LIMIT_GLOBAL',
+  'RATE_LIMIT_LOGIN',
 ]);
 
 for (const [key, value] of Object.entries(TEST_DEFAULTS)) {

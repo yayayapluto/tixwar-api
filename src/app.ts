@@ -16,9 +16,13 @@ import { errorHandler, notFoundHandler } from './middleware/error.ts';
 import type { IdempotencyStore } from './middleware/idempotency.ts';
 import { createMetricsMiddleware } from './middleware/metrics.ts';
 import type { RateLimiterSet } from './middleware/rateLimit.ts';
+import { clientIp } from './middleware/rateLimit.ts';
 import { requestIdMiddleware } from './middleware/requestId.ts';
 import { applySecurity } from './middleware/security.ts';
 import { createSlowMotionMiddleware } from './middleware/slowMotion.ts';
+
+const INTERNAL_PATHS = new Set(['/health', '/ready', '/metrics', '/openapi.json']);
+
 import { createAuthRouter } from './modules/auth/routes.ts';
 import type { TokenService } from './modules/auth/service.ts';
 import { createDebugRouter } from './modules/debug/routes.ts';
@@ -72,7 +76,15 @@ export const createApp = (deps: AppDeps): Express => {
   app.use(express.json({ limit: deps.env.BODY_LIMIT }));
   app.use(express.urlencoded({ extended: false, limit: deps.env.BODY_LIMIT }));
   app.use(createMetricsMiddleware());
-  app.use(createSlowMotionMiddleware(deps.env));
+
+  const globalLimiter = deps.rateLimiters.middleware('global', clientIp);
+  app.use((req, res, next) => {
+    if (INTERNAL_PATHS.has(req.path)) {
+      next();
+      return;
+    }
+    globalLimiter(req, res, next);
+  });
 
   const auth = createAuthMiddleware({ tokens: deps.tokens, collections: deps.collections });
   const maybeAuth = optionalAuth({ tokens: deps.tokens, collections: deps.collections });
