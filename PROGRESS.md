@@ -1,25 +1,29 @@
 # PROGRESS — TixWar API
 
 Dokumen ini mencatat posisi implementasi terhadap `docs/PRD.md`.
-Pembaruan terakhir: 15 November 2026, branch `dev`, dokumentasi direvisi sebelum release.
+Pembaruan terakhir: 15 November 2026, branch `dev`, kontrak OpenAPI dan tipe klien ditambahkan.
 
 ## Ringkasan
 
 - Backend flash sale berjalan sebagai modular monolith: API, worker, dan outbox publisher terpisah.
 - Seluruh butir P0, P1, dan P2 dari instruksi kerja sudah dikerjakan: dokumentasi wajib, API key,
   CI, observability, benchmark cache, chaos nyata, `eventStats`, dan feature flag.
+- OpenAPI kini dihasilkan dari Zod: request body bertipe, response schema, `Problem`, header rate
+  limit, dan SSE. `docs/api-types.d.ts` siap dipakai klien frontend (ADR 008).
 - Unit test, Biome, dan TypeScript hijau pada commit terakhir.
 - Integration test dan `docker compose build` sudah dijalankan; status detail ada di tabel verifikasi.
 
 ## Verifikasi terbaru
 
-| Perintah                     | Hasil                                                         |
-| ---------------------------- | ------------------------------------------------------------- |
-| `bun test tests/unit`        | 44 pass, 0 fail, 114 expect                                   |
-| `bunx biome check .`         | 143 file diperiksa, tidak ada masalah pada verifikasi release |
-| `bunx tsc --noEmit`          | 0 error                                                       |
-| `bun test tests/integration` | 84 pass, 0 fail, 328 expect (cluster compose hidup)           |
-| `docker compose build`       | exit 0 pada verifikasi terakhir; seluruh image build          |
+| Perintah                     | Hasil                                                |
+| ---------------------------- | ---------------------------------------------------- |
+| `bun test tests/unit`        | 53 pass, 0 fail, 168 expect                          |
+| `bunx biome check .`         | 147 file diperiksa, tidak ada masalah                |
+| `bunx tsc --noEmit`          | 0 error                                              |
+| `bun test tests/integration` | 84 pass, 0 fail (cluster compose hidup)              |
+| `docker compose build`       | exit 0 pada verifikasi terakhir; seluruh image build |
+| `GET /openapi.json`          | 200; identik dengan `docs/openapi.json`              |
+| `GET /docs`                  | 200 (Swagger UI)                                     |
 
 Verifikasi terakhir memakai cluster MongoDB sharded, Redis, Mailpit, dan mock gateway. Integration
 test 84/84 lulus; `docker compose build` berhasil membangun image API, worker, publisher, dan gateway.
@@ -49,7 +53,7 @@ test 84/84 lulus; `docker compose build` berhasil membangun image API, worker, p
 | M10 — Observability (P1)       | Selesai                 | Metrics server `:9464` di worker dan outbox-publisher (`src/infra/metrics/server.ts`), OTel auto-instrumentation + span manual BullMQ (`src/infra/tracing.ts`, ADR 007), Sentry opsional (`src/infra/sentry.ts`), dashboard Grafana 15 panel mencakup 7 panel minimum. |
 | M11 — Simulasi backend (P1)    | Selesai                 | Chaos redis/mongo injeksi nyata latensi + error (`src/infra/chaos.ts`) dengan auto-recovery dan durasi 30 detik; gateway/worker tetap; `/debug/load`, `/debug/stream`, slow-motion.                                                                                    |
 | M12 — Test + CI (P0/P1)        | Selesai                 | `.github/workflows/ci.yml` (Biome, tsc, unit, integration dengan service container, `docker compose build`), `.github/dependabot.yml` (npm + actions), `justfile` `test-sharding` diperbaiki ke `tests/integration/sharding.test.ts`.                                  |
-| M13 — Dokumentasi (P0)         | Selesai                 | `README.md`, `AGENTS.md`, `docs/architecture.md`, `docs/runbook.md`, `docs/demo-script.md`, koleksi Postman `docs/postman/`, ADR 001–007.                                                                                                                              |
+| M13 — Dokumentasi (P0)         | Selesai                 | `README.md`, `AGENTS.md`, `docs/architecture.md`, `docs/runbook.md`, `docs/demo-script.md`, koleksi Postman `docs/postman/`, ADR 001–008.                                                                                                                              |
 | M14 — Polish (P2)              | Selesai                 | `eventStats` service + route `GET /v1/events/:id/stats` (`src/modules/eventstats/service.ts`), feature flag Redis `sse_enabled`/`payment_retry_enabled` (`src/infra/feature-flags.ts`).                                                                                |
 
 ## Gap dan risiko
