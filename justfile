@@ -44,7 +44,7 @@ test-all:
     bun test tests
 
 test-sharding:
-    bun test tests/sharding
+    bun test tests/integration/sharding.test.ts
 
 migrate:
     bun run scripts/migrate.ts
