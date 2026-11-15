@@ -36,16 +36,33 @@ wait_for_ping() {
 }
 
 wait_for_primary() {
-  local host="$1" port="$2" label="$3"
+  local label="$1" port="$2"
+  shift 2
   for _ in $(seq 1 180); do
-    if mongosh --host "$host" --port "$port" --quiet --eval \
-      "if (db.hello().isWritablePrimary) { quit(0) } else { quit(1) }" >/dev/null 2>&1; then
-      log "$label is primary"
-      return 0
-    fi
+    for host in "$@"; do
+      if mongosh --host "$host" --port "$port" --quiet --eval \
+        "if (db.hello().isWritablePrimary) { quit(0) } else { quit(1) }" >/dev/null 2>&1; then
+        log "$label is primary on $host"
+        return 0
+      fi
+    done
     sleep 1
   done
   log "ERROR: $label did not become primary"
+  return 1
+}
+
+primary_host() {
+  local port="$1"
+  shift
+  for host in "$@"; do
+    local out
+    out=$(mongosh --host "$host" --port "$port" --quiet --eval "db.hello().primary" 2>/dev/null || true)
+    if [ -n "$out" ] && [ "$out" != "null" ]; then
+      printf '%s' "${out%%:*}"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -61,7 +78,6 @@ initiate_set() {
   else
     log "replica set $setname already initiated"
   fi
-  wait_for_primary "$host" "$port" "$setname@$host:$port"
 }
 
 add_member() {
@@ -77,8 +93,10 @@ for host in mongo-config-1 mongo-config-2 mongo-config-3; do
 done
 
 initiate_set mongo-config-1 "$CONFIG_PORT" "$CONFIG_SET" "mongo-config-1:$CONFIG_PORT"
+wait_for_primary "$CONFIG_SET" "$CONFIG_PORT" mongo-config-1 mongo-config-2 mongo-config-3
+config_primary=$(primary_host "$CONFIG_PORT" mongo-config-1 mongo-config-2 mongo-config-3)
 for host in mongo-config-2 mongo-config-3; do
-  add_member mongo-config-1 "$CONFIG_PORT" "$host:$CONFIG_PORT"
+  add_member "$config_primary" "$CONFIG_PORT" "$host:$CONFIG_PORT"
 done
 
 log "waiting for shard servers"
@@ -87,7 +105,9 @@ for shard in ${SHARDS//,/ }; do
 done
 
 for shard in ${SHARDS//,/ }; do
-  initiate_set "$(shard_container "$shard")" "$SHARD_PORT" "$shard" "$(shard_host "$shard")"
+  host=$(shard_container "$shard")
+  initiate_set "$host" "$SHARD_PORT" "$shard" "$(shard_host "$shard")"
+  wait_for_primary "$shard" "$SHARD_PORT" "$host"
 done
 
 if [ -n "$HA_MEMBERS" ]; then
@@ -97,7 +117,8 @@ if [ -n "$HA_MEMBERS" ]; then
     shard="${shard%-ha}"
     if mongosh --host "$member" --port "$SHARD_PORT" --quiet --eval \
       "db.adminCommand({ping:1}).ok" >/dev/null 2>&1; then
-      add_member "mongo-shard-$shard" "$SHARD_PORT" "$member:$SHARD_PORT"
+      shard_primary=$(primary_host "$SHARD_PORT" "mongo-shard-$shard" "$member" || true)
+      add_member "${shard_primary:-mongo-shard-$shard}" "$SHARD_PORT" "$member:$SHARD_PORT"
     else
       log "ha member $member not running, skipping"
     fi
