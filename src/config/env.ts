@@ -116,6 +116,13 @@ export const envSchema = z.object({
   MINIO_ENDPOINT: z.string().default('minio'),
   MINIO_PORT: z.coerce.number().int().positive().default(9000),
   MINIO_USE_SSL: boolEnv('false'),
+  MINIO_PUBLIC_ENDPOINT: z.string().optional(),
+  MINIO_PUBLIC_PORT: z.coerce.number().int().positive().optional(),
+  MINIO_PUBLIC_USE_SSL: z
+    .enum(['true', 'false', '1', '0'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true' || value === '1')),
+  MINIO_REGION: z.string().default('us-east-1'),
   MINIO_ACCESS_KEY: z.string().default('tixwar'),
   MINIO_SECRET_KEY: z.string().default('tixwar-minio-secret'),
   MINIO_BUCKET: z.string().default('tixwar-tickets'),

@@ -15,6 +15,8 @@ x-api-env: &api-env
   SMTP_URL: smtp://mailpit:1025
   MINIO_ENDPOINT: minio
   MINIO_PORT: "9000"
+  MINIO_PUBLIC_ENDPOINT: localhost
+  MINIO_PUBLIC_PORT: "9000"
   MINIO_ACCESS_KEY: tixwar
   MINIO_SECRET_KEY: tixwar-minio-secret
   MINIO_BUCKET: tixwar-tickets
