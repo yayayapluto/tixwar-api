@@ -1,9 +1,12 @@
 import type { AppDeps } from '../../app.ts';
+import { injectChaos, recoverChaos } from '../../infra/chaos.ts';
 import { createLogger } from '../../shared/logger.ts';
 import { badRequest } from '../../shared/problem.ts';
 import type { DebugChaosInput } from '../schemas.ts';
 
 const logger = createLogger('debug-chaos');
+
+const CHAOS_DURATION_MS = 30_000;
 
 export interface ChaosState {
   target: DebugChaosInput['target'];
@@ -12,12 +15,56 @@ export interface ChaosState {
   detail: Record<string, unknown>;
 }
 
+const injectTarget = (
+  target: 'redis' | 'mongo',
+  action: DebugChaosInput['action'],
+  value: number | undefined,
+): ChaosState => {
+  if (action === 'recover') {
+    recoverChaos(target);
+    return { target, action, applied: true, detail: { recovered: true } };
+  }
+
+  const latencyMs = action === 'latency' || action === 'slow' ? (value ?? 3000) : 0;
+  const errorRatePercent = action === 'fail' ? (value ?? 100) : 0;
+  injectChaos(target, { latencyMs, errorRatePercent, durationMs: CHAOS_DURATION_MS });
+
+  return {
+    target,
+    action,
+    applied: true,
+    detail: {
+      latencyMs,
+      errorRatePercent,
+      durationMs: CHAOS_DURATION_MS,
+      autoRecoverAfterMs: CHAOS_DURATION_MS,
+    },
+  };
+};
+
 export const applyChaos = async (
   deps: AppDeps,
   input: DebugChaosInput,
   requestId: string,
 ): Promise<ChaosState> => {
   if (input.target === 'gateway') {
+    if (input.action === 'recover') {
+      await fetch(`${deps.env.GATEWAY_URL}/toggle-fail`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+        signal: AbortSignal.timeout(3000),
+      });
+      await fetch(`${deps.env.GATEWAY_URL}/latency`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ latencyMs: 0 }),
+        signal: AbortSignal.timeout(3000),
+      });
+      logger.info({ requestId, target: 'gateway', action: 'recover' }, 'chaos recovered');
+      return { target: 'gateway', action: 'recover', applied: true, detail: { recovered: true } };
+    }
+
     const endpoint = input.action === 'latency' ? '/latency' : '/toggle-fail';
     const body =
       input.action === 'latency'
@@ -35,7 +82,7 @@ export const applyChaos = async (
   }
 
   if (input.target === 'worker') {
-    const value = input.value ?? 100;
+    const value = input.action === 'recover' ? 0 : (input.value ?? 100);
     await deps.redis.set('chaos:worker:failure-rate', String(value), 'EX', 3600);
     return {
       target: 'worker',
@@ -46,34 +93,12 @@ export const applyChaos = async (
   }
 
   if (input.target === 'redis') {
-    const value = input.value ?? 3000;
-    await deps.redis.set('chaos:redis:latency-ms', String(value), 'EX', 3600);
-    return {
-      target: 'redis',
-      action: input.action,
-      applied: true,
-      detail: {
-        latencyMs: value,
-        note: 'informational only; redis latency is not injected in-process',
-      },
-    };
+    return injectTarget('redis', input.action, input.value);
   }
 
   if (input.target === 'mongo') {
-    const value = input.value ?? 1000;
-    await deps.redis.set('chaos:mongo:slow-ms', String(value), 'EX', 3600);
-    return {
-      target: 'mongo',
-      action: input.action,
-      applied: true,
-      detail: { slowMs: value, note: 'read by debug instrumentation only' },
-    };
+    return injectTarget('mongo', input.action, input.value);
   }
 
   throw badRequest('unsupported chaos target');
-};
-
-export const workerFailureRate = async (deps: AppDeps): Promise<number> => {
-  const value = await deps.redis.get('chaos:worker:failure-rate');
-  return value ? Number(value) : 0;
 };

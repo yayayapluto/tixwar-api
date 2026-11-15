@@ -2,6 +2,7 @@ import type { Redis } from 'ioredis';
 import RedisClient from 'ioredis';
 import type { Env } from '../../config/env.ts';
 import { createLogger } from '../../shared/logger.ts';
+import { instrumentRedisChaos } from '../chaos.ts';
 
 const logger = createLogger('redis');
 
@@ -21,6 +22,7 @@ export const createRedisClient = (env: Env, role: string): Redis => {
   client.on('error', (error) => {
     logger.warn({ err: error, role }, 'redis error');
   });
+  instrumentRedisChaos(client);
   return client;
 };
 

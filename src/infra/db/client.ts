@@ -9,6 +9,7 @@ import {
 } from 'mongodb';
 import type { Env } from '../../config/env.ts';
 import { createLogger } from '../../shared/logger.ts';
+import { instrumentMongoChaos } from '../chaos.ts';
 import { metrics } from '../metrics/registry.ts';
 
 const logger = createLogger('mongo');
@@ -110,6 +111,7 @@ export const createMongoClient = (env: Env, uri = env.MONGODB_URI): MongoClient 
 
 export const connectMongo = async (env: Env): Promise<MongoContext> => {
   const client = createMongoClient(env);
+  instrumentMongoChaos(client);
   await client.connect();
   const db = client.db(env.MONGODB_DATABASE);
   const readDb = client.db(env.MONGODB_DATABASE, {
