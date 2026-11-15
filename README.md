@@ -112,7 +112,7 @@ Seluruh nilai tier rate limit, TTL cache, timeout breaker, concurrency worker, d
 # Unit test (baseline hijau: 44 pass)
 just test               # = bun test tests/unit
 
-# Integration test (butuh cluster compose: mongos + redis)
+# Integration test (butuh cluster compose: mongos, redis, Mailpit, mock gateway)
 just up                 # prasyarat cluster
 just test-integration   # = bun test tests/integration
 
@@ -123,7 +123,7 @@ just test-all           # = bun test tests
 just test-sharding      # = bun test tests/integration/sharding.test.ts
 ```
 
-Integration test memakai database terpisah `tixwar_test`, Redis DB 1, dan prefix queue `tixwar-test` (lihat `tests/setup.ts`). Test **tidak self-contained**: butuh `mongos` dan `redis` dari Compose; gagal cepat `ECONNREFUSED` bila cluster tidak jalan (ADR 002).
+Integration test memakai database terpisah `tixwar_test`, Redis DB 1, dan prefix queue `tixwar-test` (lihat `tests/setup.ts`). Test membutuhkan `mongos`, Redis, Mailpit, dan mock gateway dari Compose; object storage dapat memakai S3-compatible endpoint sesuai ADR 006. Test gagal cepat `ECONNREFUSED` bila dependency tidak jalan (ADR 002).
 
 Verifikasi statis:
 
@@ -170,10 +170,10 @@ Detil operasional dan recovery: `docs/runbook.md`.
 
 ## Dokumentasi
 
-- `docs/architecture.md` — komponen, alur order + stok Lua, outbox + saga, sharding, cache, rate limit (C4 + sequence).
-- `docs/runbook.md` — operasi harian dan prosedur recovery.
+- `docs/architecture.md` — komponen, order + stok Lua, outbox + saga, sharding, cache, rate limit, observability, read model, feature flags.
+- `docs/runbook.md` — operasi harian, recovery, chaos Redis/Mongo, DLQ, reshard, dan late payment.
 - `docs/demo-script.md` — naskah demo presentasi.
-- `docs/adr/` — Architecture Decision Records.
-- `docs/benchmarks/` — hasil load test nyata.
+- `docs/adr/` — Architecture Decision Records, termasuk keputusan OTel/BullMQ.
+- `docs/benchmarks/` — hasil load test nyata sebelum/sesudah cache.
 - `docs/postman/` — koleksi request Postman (auth, events, orders, pay, SSE, API key).
 - `AGENTS.md` — konvensi repo untuk coding agent.

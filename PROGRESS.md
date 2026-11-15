@@ -1,8 +1,7 @@
 # PROGRESS — TixWar API
 
 Dokumen ini mencatat posisi implementasi terhadap `docs/PRD.md`.
-Pembaruan terakhir: 15 November 2026, branch `dev`, commit `f5ce90c`
-(`feat(event-stats): add eventStats read model route and feature flags`).
+Pembaruan terakhir: 15 November 2026, branch `dev`, dokumentasi direvisi sebelum release.
 
 ## Ringkasan
 
@@ -10,22 +9,20 @@ Pembaruan terakhir: 15 November 2026, branch `dev`, commit `f5ce90c`
 - Seluruh butir P0, P1, dan P2 dari instruksi kerja sudah dikerjakan: dokumentasi wajib, API key,
   CI, observability, benchmark cache, chaos nyata, `eventStats`, dan feature flag.
 - Unit test, Biome, dan TypeScript hijau pada commit terakhir.
-- Integration test dan `docker compose build` dijalankan ulang pada audit ini karena Docker daemon
-  dihidupkan; lihat bagian verifikasi untuk hasil.
+- Integration test dan `docker compose build` sudah dijalankan; status detail ada di tabel verifikasi.
 
 ## Verifikasi terbaru
 
-| Perintah                     | Hasil                                                    |
-| ---------------------------- | -------------------------------------------------------- |
-| `bun test tests/unit`        | 44 pass, 0 fail, 114 expect                              |
-| `bunx biome check .`         | 143 file diperiksa, tidak ada masalah                    |
-| `bunx tsc --noEmit`          | 0 error                                                  |
-| `bun test tests/integration` | 84 pass, 0 fail, 328 expect (cluster compose hidup)      |
-| `docker compose build`       | exit 0; seluruh image API/worker/publisher/gateway build |
+| Perintah                     | Hasil                                                         |
+| ---------------------------- | ------------------------------------------------------------- |
+| `bun test tests/unit`        | 44 pass, 0 fail, 114 expect                                   |
+| `bunx biome check .`         | 143 file diperiksa, tidak ada masalah pada verifikasi release |
+| `bunx tsc --noEmit`          | 0 error                                                       |
+| `bun test tests/integration` | 84 pass, 0 fail, 328 expect (cluster compose hidup)           |
+| `docker compose build`       | exit 0 pada verifikasi terakhir; seluruh image build          |
 
-Seluruh verifikasi di atas dijalankan ulang pada commit terakhir. Cluster MongoDB sharded, Redis,
-Mailpit, dan mock gateway dihidupkan; integration test 84/84 lulus; `docker compose build` berhasil
-membangun seluruh image.
+Verifikasi terakhir memakai cluster MongoDB sharded, Redis, Mailpit, dan mock gateway. Integration
+test 84/84 lulus; `docker compose build` berhasil membangun image API, worker, publisher, dan gateway.
 
 ## Benchmark tersimpan
 

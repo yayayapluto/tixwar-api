@@ -27,5 +27,6 @@ PRD Bagian 10 mewajibkan trace OpenTelemetry dari HTTP → queue → worker → 
 
 ## Bukti
 
-- `bunx tsc --noEmit` dan `bun test tests/unit` hijau setelah penambahan.
-- Verifikasi end-to-end ke Jaeger **belum dijalankan** karena Docker daemon mati saat pengerjaan; dicatat sebagai blocker pada laporan.
+- `bunx tsc --noEmit`, `bunx biome check .`, dan `bun test tests/unit` hijau setelah penambahan.
+- `bun test tests/integration` lulus 84 test dan `docker compose build` exit 0 pada verifikasi release.
+- Verifikasi UI/trace end-to-end di Jaeger belum dilakukan; deployment harus memeriksa span HTTP, Redis, MongoDB, publisher, dan worker setelah Jaeger aktif.

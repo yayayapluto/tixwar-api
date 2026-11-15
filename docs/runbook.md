@@ -86,7 +86,22 @@ Ini adalah skenario kompensasi terdokumentasi (PRD 6.4): jangan pernah menerbitk
 
 ## Pemulihan Redis / Mongo (chaos)
 
-`POST /debug/chaos` (hanya `DEBUG_ENABLED=true` + admin) menginjeksi kegagalan. Injeksi `redis` dan `mongo` memiliki pemulihan otomatis dan batas durasi (lihat `src/modules/debug/chaos.ts`).
+`POST /debug/chaos` (hanya `DEBUG_ENABLED=true` + admin) menginjeksi kegagalan nyata. Redis diintersep pada `sendCommand`; Mongo pada operasi collection/cursor. Rule otomatis berakhir setelah 30 detik dan dapat dihentikan dengan `action=recover`.
+
+```bash
+# Redis latency 3 detik; auto-recover 30 detik
+curl -X POST http://localhost:8080/debug/chaos \
+  -H 'content-type: application/json' -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"target":"redis","action":"latency","value":3000}'
+
+# Mongo error 100%; pulihkan segera
+curl -X POST http://localhost:8080/debug/chaos \
+  -H 'content-type: application/json' -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"target":"mongo","action":"fail","value":100}'
+curl -X POST http://localhost:8080/debug/chaos \
+  -H 'content-type: application/json' -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"target":"mongo","action":"recover"}'
+```
 
 - Redis stock gate fail-closed: pembelian baru → 503 sampai pulih; cache baca tetap fail-open.
 - Recovery stok: `just rebuild-stock-dry-run` lalu `--apply`.

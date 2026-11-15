@@ -1,6 +1,6 @@
 # Arsitektur TixWar
 
-Dokumen ini mencerminkan implementasi aktual pada branch `dev`, commit `60ed2d4`. Sumber kebenaran fitur: `docs/PRD.md`; keputusan yang menyimpang: `docs/adr/`.
+Dokumen ini mencerminkan implementasi aktual pada branch `dev`. Sumber kebenaran fitur: `docs/PRD.md`; keputusan yang menyimpang: `docs/adr/`.
 
 ## 1. Komponen (C4 context)
 
@@ -145,3 +145,14 @@ Cache-aside Redis (`src/infra/redis/cache.ts`):
 ## 6. Rate limit
 
 `rate-limiter-flexible` dengan Redis store (`src/middleware/rateLimit.ts`). Tier: `anon-browse` (120/mnt/IP), `global` (300/mnt/IP), `login` (5/mnt/IP+email + lockout 10 gagal/jam), `order-user` (3/mnt), `order-ip` (30/mnt), `pay-user` (5/mnt). Semua configurable via env. Redis mati → fail-open ke `RateLimiterMemory` yang lebih ketat (per-instance, bukan distributed). Header `RateLimit-*` + `Retry-After`, metrik `rate_limit_rejected_total`.
+
+## 7. Read model dan feature flags
+
+- `GET /v1/events/:id/stats` membaca read model `eventStats`; bila belum ada, service menghitung `sold` dari tickets dan `revenue` dari order `PAID`/`CONFIRMED`, lalu menyimpan snapshot.
+- Feature flag bersumber dari Redis dengan key `feature:sse_enabled` dan `feature:payment_retry_enabled`. Default keduanya `true`; `sse_enabled` mengendalikan endpoint SSE.
+
+## 8. Observability
+
+- API menyajikan `/metrics` pada port API. Worker dan outbox publisher menyajikan `/metrics` pada port `9464`, sesuai target Prometheus.
+- OTel aktif bila `OTEL_EXPORTER_OTLP_ENDPOINT` diset. HTTP/Express, ioredis, dan MongoDB memakai auto-instrumentation; publisher dan worker memakai span manual BullMQ dengan propagasi `traceparent` di payload outbox.
+- Sentry opsional dan hanya aktif bila `SENTRY_DSN` diset. Dashboard Grafana berisi 15 panel, mencakup latency, cache, rate limit, queue/outbox, breaker, MongoDB, stok, dan order.
