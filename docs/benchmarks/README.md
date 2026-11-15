@@ -6,6 +6,9 @@ Berkas yang tersedia:
 
 - `2026-11-14-browse-cache-warm.md` — browse katalog, cache sudah hangat.
 - `2026-11-14-war-300vu-100tickets.md` — simulasi war tiket.
+- `2026-11-14-abuse-rate-limit.md` — rate limit satu IP 200 req/detik.
+- `2026-11-15-browse-cache-cold.md` — browse katalog, cache dingin (sebelum cache).
+- `2026-11-15-browse-cache-warm.md` — browse katalog, cache hangat (sesudah cache); perbandingan sebelum/sesudah.
 
 Catatan umum environment:
 
