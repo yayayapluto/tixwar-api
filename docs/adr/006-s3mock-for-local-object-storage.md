@@ -6,12 +6,12 @@ PRD Bagian 4.7 dan 9.13 mewajibkan QR tiket disimpan di MinIO dan diakses melalu
 
 ## Keputusan
 
-Stack Compose tetap mendeklarasikan service `minio` dan `minio-init` dengan image `minio/minio` (konfigurasi target sesuai PRD). Untuk eksekusi lokal di mesin ini, dipakai `adobe/s3mock:latest` pada port yang sama (9000). Klien tetap `minio` SDK resmi; tidak ada perubahan kode aplikasi.
+Service `minio` di `docker-compose.yml` memakai `adobe/s3mock:latest` yang melayani S3 API pada port 9000, sehingga `MINIO_ENDPOINT=minio` dan `MINIO_PORT=9000` tidak berubah. Klien tetap `minio` SDK resmi; tidak ada perubahan kode aplikasi. Bucket `tixwar-tickets` dibuat lewat `COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS`, bukan service init terpisah.
 
 Perbedaan yang relevan:
 
-- `adobe/s3mock` melayani S3 API pada port 9090 di dalam container, dipetakan ke 9000 host.
-- Tidak ada console web (port 9001), sehingga verifikasi objek dilakukan lewat presigned URL dan `mc`/SDK, bukan MinIO console.
+- `adobe/s3mock` tidak punya console web, sehingga verifikasi objek dilakukan lewat presigned URL dan SDK, bukan MinIO console.
+- Data disimpan di volume `minio-data` (`COM_ADOBE_TESTING_S3MOCK_STORE_ROOT=/data`), jadi objek bertahan setelah container dibuat ulang.
 
 ## Alternatif
 
