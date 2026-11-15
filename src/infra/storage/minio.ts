@@ -20,6 +20,17 @@ export const connectStorage = async (env: Env): Promise<StorageContext> => {
     secretKey: env.MINIO_SECRET_KEY,
   });
 
+  const presignClient = env.MINIO_PUBLIC_ENDPOINT
+    ? new Client({
+        endPoint: env.MINIO_PUBLIC_ENDPOINT,
+        port: env.MINIO_PUBLIC_PORT ?? env.MINIO_PORT,
+        useSSL: env.MINIO_PUBLIC_USE_SSL ?? env.MINIO_USE_SSL,
+        accessKey: env.MINIO_ACCESS_KEY,
+        secretKey: env.MINIO_SECRET_KEY,
+        region: env.MINIO_REGION,
+      })
+    : client;
+
   const ensureBucket = async (): Promise<void> => {
     try {
       const exists = await client.bucketExists(env.MINIO_BUCKET);
@@ -37,7 +48,7 @@ export const connectStorage = async (env: Env): Promise<StorageContext> => {
     bucket: env.MINIO_BUCKET,
     ensureBucket,
     presignedGet: async (objectKey: string) =>
-      client.presignedGetObject(env.MINIO_BUCKET, objectKey, env.MINIO_PRESIGN_TTL_SECONDS),
+      presignClient.presignedGetObject(env.MINIO_BUCKET, objectKey, env.MINIO_PRESIGN_TTL_SECONDS),
   };
 };
 
