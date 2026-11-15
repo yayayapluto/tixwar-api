@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import type { AppDeps } from '../../app.ts';
 import { openSseStream } from '../../debug/sse.ts';
+import { featureEnabled } from '../../infra/feature-flags.ts';
 import { requireRole } from '../../middleware/auth.ts';
 import { clientIp } from '../../middleware/rateLimit.ts';
 import { validate, validated } from '../../middleware/validate.ts';
 import { buildEnvelope } from '../../shared/http.ts';
-import { badRequest, notFound } from '../../shared/problem.ts';
+import { badRequest, dependencyUnavailable, notFound } from '../../shared/problem.ts';
 import { pathParam } from '../../shared/request.ts';
 import { audit } from '../audit/service.ts';
+import { EventStatsService } from '../eventstats/service.ts';
 import {
   type BulkTiersInput,
   bulkTiersSchema,
@@ -23,6 +25,7 @@ import type { EventService } from './service.ts';
 
 export const createEventsRouter = (deps: AppDeps, service: EventService): Router => {
   const router = Router();
+  const stats = new EventStatsService(deps.collections);
 
   router.get(
     '/',
@@ -83,6 +86,9 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
 
   router.get('/:id/stream', async (req, res, next) => {
     try {
+      if (!(await featureEnabled(deps.redis, 'sse_enabled'))) {
+        throw dependencyUnavailable('SSE is disabled by feature flag');
+      }
       const event = await deps.collections.events.findOne({
         _id: pathParam(req, 'id'),
         deletedAt: null,
@@ -96,6 +102,21 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
         label: 'stock',
         lastEventId: req.header('last-event-id'),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/:id/stats', async (req, res, next) => {
+    try {
+      const result = await stats.get(pathParam(req, 'id'));
+      res.json(
+        buildEnvelope({
+          data: result,
+          self: `/v1/events/${result.eventId}/stats`,
+          limit: 1,
+        }),
+      );
     } catch (error) {
       next(error);
     }

@@ -327,6 +327,14 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         responses: { 200: { description: 'text/event-stream' } },
       },
     },
+    '/v1/events/{id}/stats': {
+      get: {
+        tags: ['events'],
+        summary: 'Read model stats: sold and revenue for an event',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Event stats' }, ...errorResponses([404]) },
+      },
+    },
     '/v1/orders': {
       post: {
         tags: ['orders'],
