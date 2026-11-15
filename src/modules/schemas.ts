@@ -246,7 +246,10 @@ const includeSchema = z
 
 export const eventListQuerySchema = z
   .object({
-    q: z.string().trim().min(1).max(200).optional(),
+    q: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().trim().min(1).max(200).optional(),
+    ),
     category: z.string().trim().toLowerCase().max(60).optional(),
     city: z.string().trim().toLowerCase().max(60).optional(),
     status: z

@@ -24,6 +24,12 @@ describe('event list query schema', () => {
     expect(query.include).toEqual(['tiers']);
   });
 
+  it('treats an empty or whitespace-only q as absent', () => {
+    expect(parse({ q: '', page: '1', limit: '12' }).q).toBeUndefined();
+    expect(parse({ q: '   ' }).q).toBeUndefined();
+    expect(parse({ q: '  jazz ' }).q).toBe('jazz');
+  });
+
   it('clamps the default limit and enforces the maximum', () => {
     expect(parse({}).limit).toBe(20);
     expect(() => parse({ limit: '101' })).toThrow();
