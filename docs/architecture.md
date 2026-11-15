@@ -156,3 +156,11 @@ Cache-aside Redis (`src/infra/redis/cache.ts`):
 - API menyajikan `/metrics` pada port API. Worker dan outbox publisher menyajikan `/metrics` pada port `9464`, sesuai target Prometheus.
 - OTel aktif bila `OTEL_EXPORTER_OTLP_ENDPOINT` diset. HTTP/Express, ioredis, dan MongoDB memakai auto-instrumentation; publisher dan worker memakai span manual BullMQ dengan propagasi `traceparent` di payload outbox.
 - Sentry opsional dan hanya aktif bila `SENTRY_DSN` diset. Dashboard Grafana berisi 15 panel, mencakup latency, cache, rate limit, queue/outbox, breaker, MongoDB, stok, dan order.
+
+## 9. Kontrak API dan tipe klien
+
+- `src/modules/schemas.ts` adalah sumber kebenaran input (Zod); `src/modules/docs/models.ts` mendefinisikan bentuk response.
+- `src/modules/docs/openapi.ts` mengubah keduanya menjadi JSON Schema OpenAPI 3.0: 26 path, 39 komponen, request body bertipe, response envelope `data/meta/links`, `Problem` RFC 7807, header `RateLimit-*`, `Retry-After`, `ETag`, dan `text/event-stream` untuk SSE.
+- Zod tidak merepresentasikan `Date` di JSON Schema; field tanggal ditulis sebagai `type: string, format: date-time`.
+- `bun run scripts/gen-api-types.ts` (alias `just api-types`) menulis `docs/openapi.json` dan `docs/api-types.d.ts`. Kedua berkas dihasilkan, jangan diedit manual.
+- `/openapi.json` dan `/docs` menyajikan dokumen yang sama persis dengan artefak hasil generate.

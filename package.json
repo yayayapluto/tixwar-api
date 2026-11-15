@@ -22,6 +22,7 @@
     "reshard": "bun scripts/reshard.ts",
     "gen-tokens": "bun scripts/gen-tokens.ts",
     "verify-sharding": "bun scripts/verify-sharding.ts",
+    "api:types": "bun scripts/gen-api-types.ts",
     "prepare": "husky"
   },
   "dependencies": {
