@@ -15,19 +15,17 @@ Pembaruan terakhir: 15 November 2026, branch `dev`, commit `f5ce90c`
 
 ## Verifikasi terbaru
 
-| Perintah                     | Hasil                                                                  |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `bun test tests/unit`        | 44 pass, 0 fail, 114 expect                                            |
-| `bunx biome check .`         | 141 file diperiksa, tidak ada masalah                                  |
-| `bunx tsc --noEmit`          | 0 error                                                                |
-| `docker compose build`       | belum diverifikasi; build image belum dijalankan (lihat catatan)       |
-| `bun test tests/integration` | belum dijalankan ulang; butuh cluster compose (belum dieksekusi penuh) |
+| Perintah                     | Hasil                                                    |
+| ---------------------------- | -------------------------------------------------------- |
+| `bun test tests/unit`        | 44 pass, 0 fail, 114 expect                              |
+| `bunx biome check .`         | 143 file diperiksa, tidak ada masalah                    |
+| `bunx tsc --noEmit`          | 0 error                                                  |
+| `bun test tests/integration` | 84 pass, 0 fail, 328 expect (cluster compose hidup)      |
+| `docker compose build`       | exit 0; seluruh image API/worker/publisher/gateway build |
 
-Unit test tetap 44 pass. Biome memeriksa 141 file tanpa masalah. TypeScript 0 error.
-
-Integration test dan `docker compose build` **belum diverifikasi penuh** pada commit terakhir.
-Cluster MongoDB sharded dan Redis sempat dihidupkan untuk benchmark dan smoke test chaos/P2,
-tetapi suite integration 84 test tidak dijalankan ulang; `docker compose build` juga belum dieksekusi.
+Seluruh verifikasi di atas dijalankan ulang pada commit terakhir. Cluster MongoDB sharded, Redis,
+Mailpit, dan mock gateway dihidupkan; integration test 84/84 lulus; `docker compose build` berhasil
+membangun seluruh image.
 
 ## Benchmark tersimpan
 
@@ -59,17 +57,14 @@ tetapi suite integration 84 test tidak dijalankan ulang; `docker compose build` 
 
 ## Gap dan risiko
 
-1. Integration test (84 test) belum dijalankan ulang pada commit terakhir; cluster compose sempat hidup
-   untuk smoke test, tetapi suite lengkap belum dieksekusi.
-2. `docker compose build` belum diverifikasi.
-3. Verifikasi end-to-end trace ke Jaeger belum dijalankan (butuh stack observability penuh naik).
-4. Feature flag `payment_retry_enabled` didefinisikan tetapi baru dikonsumsi `sse_enabled`; konsumen
+1. Verifikasi end-to-end trace ke Jaeger belum dijalankan (butuh stack observability penuh naik).
+2. Feature flag `payment_retry_enabled` didefinisikan tetapi baru dikonsumsi `sse_enabled`; konsumen
    `payment_retry_enabled` dapat ditambahkan di worker bila diperlukan.
 
 ## Catatan audit
 
-- Docker daemon dihidupkan pada sesi ini (sebelumnya mati). Cluster sharded + Redis dipakai untuk
-  benchmark browse dingin/hangat dan smoke test chaos/P2.
+- Docker daemon dihidupkan pada sesi ini (sebelumnya mati). Cluster sharded + Redis + Mailpit +
+  mock gateway dipakai untuk benchmark, smoke test chaos/P2, integration test (84/84), dan build image.
 - `.env` tidak masuk Git; `.env.example` berisi nilai contoh dan kini menyertakan `METRICS_PORT`.
 - Secret development di `docker-compose.yml` hanya untuk lingkungan lokal.
 - Setiap butir dikerjakan sebagai satu commit terpisah (lihat `git log`): dokumentasi, API key, CI,
