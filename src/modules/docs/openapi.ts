@@ -1,64 +1,203 @@
-const problemSchema = {
-  type: 'object',
-  required: ['type', 'title', 'status', 'detail', 'code'],
-  properties: {
-    type: { type: 'string' },
-    title: { type: 'string' },
-    status: { type: 'integer' },
-    detail: { type: 'string' },
-    instance: { type: 'string' },
-    requestId: { type: 'string' },
-    code: { type: 'string' },
-    errors: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          field: { type: 'string' },
-          message: { type: 'string' },
-          value: { type: 'string' },
-        },
-      },
-    },
-  },
-} as const;
+import { z } from 'zod';
+import {
+  bulkTiersSchema,
+  cancelOrderSchema,
+  createApiKeySchema,
+  createEventSchema,
+  createOrderSchema,
+  createWebhookSchema,
+  debugChaosSchema,
+  debugLoadSchema,
+  loginSchema,
+  patchEventSchema,
+  payOrderSchema,
+  refreshSchema,
+  registerSchema,
+  tierSchema,
+} from '../schemas.ts';
+import {
+  apiKeyCreatedSchema,
+  apiKeySchema,
+  authSessionSchema,
+  bulkTiersResultSchema,
+  chaosStateSchema,
+  eventCreateResultSchema,
+  eventDetailSchema,
+  eventPatchResultSchema,
+  eventSchema,
+  eventStatsSchema,
+  linksSchema,
+  metaSchema,
+  orderCancelResultSchema,
+  orderResultSchema,
+  orderSchema,
+  paymentSchema,
+  payResultSchema,
+  problemSchema,
+  refreshResultSchema,
+  ticketDetailSchema,
+  ticketSchema,
+  tierSchema as tierModelSchema,
+  userSchema,
+  webhookCreatedSchema,
+  webhookEndpointSchema,
+} from './models.ts';
 
-const envelope = (dataSchema: Record<string, unknown>): Record<string, unknown> => ({
+type JsonSchema = Record<string, unknown>;
+
+const DATE_FIELDS = new Set(['startsAt', 'saleStartsAt', 'saleEndsAt', 'date_from', 'date_to']);
+
+const patchDates = (node: unknown): void => {
+  if (node === null || typeof node !== 'object') return;
+  const record = node as Record<string, unknown>;
+  const properties = record.properties;
+  if (properties !== null && typeof properties === 'object') {
+    for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+      const isEmptySchema =
+        value !== null && typeof value === 'object' && Object.keys(value as object).length === 0;
+      if (isEmptySchema && DATE_FIELDS.has(key)) {
+        (properties as Record<string, unknown>)[key] = {
+          type: 'string',
+          format: 'date-time',
+        };
+        continue;
+      }
+      patchDates(value);
+    }
+  }
+  for (const value of Object.values(record)) {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) patchDates(value);
+    if (Array.isArray(value)) for (const entry of value) patchDates(entry);
+  }
+};
+
+const stripDateTimePattern = (node: unknown): void => {
+  if (node === null || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const entry of node) stripDateTimePattern(entry);
+    return;
+  }
+  const record = node as Record<string, unknown>;
+  if (record.type === 'string' && record.format === 'date-time' && 'pattern' in record) {
+    delete record.pattern;
+  }
+  for (const value of Object.values(record)) stripDateTimePattern(value);
+};
+
+const toJson = (schema: z.ZodType, io: 'input' | 'output' = 'output'): JsonSchema => {
+  const json = z.toJSONSchema(schema, {
+    target: 'openapi-3.0',
+    io,
+    unrepresentable: 'any',
+  }) as JsonSchema;
+  patchDates(json);
+  stripDateTimePattern(json);
+  return json;
+};
+
+const ref = (name: string): JsonSchema => ({ $ref: `#/components/schemas/${name}` });
+
+const envelopeOf = (dataSchema: JsonSchema): JsonSchema => ({
   type: 'object',
   required: ['data', 'meta', 'links'],
-  properties: {
-    data: dataSchema,
-    meta: {
-      type: 'object',
-      properties: {
-        page: { type: 'integer' },
-        limit: { type: 'integer' },
-        total: { type: 'integer' },
-        nextCursor: { type: ['string', 'null'] },
-        hasMore: { type: 'boolean' },
-      },
-    },
-    links: {
-      type: 'object',
-      properties: {
-        self: { type: 'string' },
-        next: { type: ['string', 'null'] },
-        prev: { type: ['string', 'null'] },
-      },
-    },
-  },
+  properties: { data: dataSchema, meta: ref('Meta'), links: ref('Links') },
 });
 
-const errorResponses = (codes: number[]): Record<string, unknown> =>
+const jsonBody = (name: string, required = true): JsonSchema => ({
+  required,
+  content: { 'application/json': { schema: ref(name) } },
+});
+
+const jsonResponse = (description: string, schema: JsonSchema): JsonSchema => ({
+  description,
+  content: { 'application/json': { schema } },
+});
+
+const sseResponse = (description: string, events: string[]): JsonSchema => ({
+  description: `${description}. Event names: ${events.join(', ')}. Each frame is \`event: <name>\`, \`id: <id>\`, \`data: <json>\`.`,
+  content: { 'text/event-stream': { schema: { type: 'string' } } },
+});
+
+const rateLimitHeaders: JsonSchema = {
+  'RateLimit-Limit': { schema: { type: 'integer' }, description: 'Requests allowed in window' },
+  'RateLimit-Remaining': { schema: { type: 'integer' }, description: 'Requests left in window' },
+  'RateLimit-Reset': { schema: { type: 'integer' }, description: 'Seconds until window reset' },
+  'Retry-After': { schema: { type: 'integer' }, description: 'Seconds before retry' },
+};
+
+const problemResponses = (codes: number[]): Record<string, unknown> =>
   Object.fromEntries(
     codes.map((code) => [
       String(code),
       {
         description: `RFC 7807 problem response (${code})`,
-        content: { 'application/problem+json': { schema: problemSchema } },
+        headers: code === 429 ? rateLimitHeaders : undefined,
+        content: { 'application/problem+json': { schema: ref('Problem') } },
       },
     ]),
   );
+
+const idempotencyHeader: JsonSchema = {
+  name: 'Idempotency-Key',
+  in: 'header',
+  required: true,
+  schema: { type: 'string', minLength: 8 },
+  description: 'Client-generated key; same key + same payload replays the stored result',
+};
+
+const pathId: JsonSchema = {
+  name: 'id',
+  in: 'path',
+  required: true,
+  schema: { type: 'string' },
+};
+
+const eventStatusEnum = ['DRAFT', 'SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'ENDED'];
+
+const requestComponents = {
+  RegisterRequest: toJson(registerSchema, 'input'),
+  LoginRequest: toJson(loginSchema, 'input'),
+  RefreshRequest: toJson(refreshSchema, 'input'),
+  CreateEventRequest: toJson(createEventSchema, 'input'),
+  PatchEventRequest: toJson(patchEventSchema, 'input'),
+  TierRequest: toJson(tierSchema, 'input'),
+  BulkTiersRequest: toJson(bulkTiersSchema, 'input'),
+  CreateOrderRequest: toJson(createOrderSchema, 'input'),
+  PayRequest: toJson(payOrderSchema, 'input'),
+  CancelOrderRequest: toJson(cancelOrderSchema, 'input'),
+  CreateWebhookRequest: toJson(createWebhookSchema, 'input'),
+  CreateApiKeyRequest: toJson(createApiKeySchema, 'input'),
+  DebugLoadRequest: toJson(debugLoadSchema, 'input'),
+  DebugChaosRequest: toJson(debugChaosSchema, 'input'),
+};
+
+const responseComponents = {
+  Problem: toJson(problemSchema),
+  Meta: toJson(metaSchema),
+  Links: toJson(linksSchema),
+  User: toJson(userSchema),
+  AuthSession: toJson(authSessionSchema),
+  RefreshResult: toJson(refreshResultSchema),
+  Event: toJson(eventSchema),
+  EventDetail: toJson(eventDetailSchema),
+  TicketTier: toJson(tierModelSchema),
+  EventCreateResult: toJson(eventCreateResultSchema),
+  EventPatchResult: toJson(eventPatchResultSchema),
+  BulkTiersResult: toJson(bulkTiersResultSchema),
+  EventStats: toJson(eventStatsSchema),
+  Order: toJson(orderSchema),
+  OrderResult: toJson(orderResultSchema),
+  OrderCancelResult: toJson(orderCancelResultSchema),
+  Payment: toJson(paymentSchema),
+  PayResult: toJson(payResultSchema),
+  Ticket: toJson(ticketSchema),
+  TicketDetail: toJson(ticketDetailSchema),
+  ApiKey: toJson(apiKeySchema),
+  ApiKeyCreated: toJson(apiKeyCreatedSchema),
+  WebhookEndpoint: toJson(webhookEndpointSchema),
+  WebhookCreated: toJson(webhookCreatedSchema),
+  ChaosState: toJson(chaosStateSchema),
+};
 
 export const buildOpenApiDocument = (): Record<string, unknown> => ({
   openapi: '3.0.3',
@@ -66,7 +205,7 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
     title: 'TixWar — Flash Sale Ticketing API',
     version: '1.0.0',
     description:
-      'Backend-only flash sale ticketing API. Redis stock gate, MongoDB sharded cluster via mongos, outbox and BullMQ saga.',
+      'Backend flash sale ticketing API. Redis stock gate, MongoDB sharded cluster via mongos, outbox and BullMQ saga. Schemas are generated from the Zod contracts in src/modules/schemas.ts and src/modules/docs/models.ts.',
   },
   servers: [{ url: '/', description: 'Current host' }],
   tags: [
@@ -83,80 +222,17 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
     },
-    schemas: {
-      Problem: problemSchema,
-      Event: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', example: 'evt_01JABCDEF' },
-          name: { type: 'string' },
-          description: { type: 'string' },
-          category: { type: 'string' },
-          city: { type: 'string' },
-          venue: { type: 'string' },
-          startsAt: { type: 'string', format: 'date-time' },
-          status: { type: 'string', enum: ['DRAFT', 'SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'ENDED'] },
-        },
-      },
-      Order: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          userId: { type: 'string' },
-          eventId: { type: 'string' },
-          tierId: { type: 'string' },
-          quantity: { type: 'integer' },
-          unitPrice: { type: 'integer', description: 'Integer rupiah' },
-          total: { type: 'integer' },
-          status: {
-            type: 'string',
-            enum: [
-              'PENDING_PAYMENT',
-              'PAYMENT_QUEUED',
-              'PAID',
-              'CONFIRMED',
-              'PAYMENT_FAILED',
-              'EXPIRED',
-              'CANCELLED',
-            ],
-          },
-          expiresAt: { type: 'string', format: 'date-time' },
-        },
-      },
-      Ticket: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          orderId: { type: 'string' },
-          code: { type: 'string' },
-          issuedAt: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
+    schemas: { ...requestComponents, ...responseComponents },
   },
   paths: {
     '/v1/auth/register': {
       post: {
         tags: ['auth'],
         summary: 'Register a user',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['email', 'password'],
-                properties: {
-                  email: { type: 'string', format: 'email' },
-                  password: { type: 'string', minLength: 10 },
-                },
-              },
-            },
-          },
-        },
+        requestBody: jsonBody('RegisterRequest'),
         responses: {
-          201: { description: 'User created with tokens' },
-          ...errorResponses([400, 409, 429]),
+          201: jsonResponse('User created with tokens', envelopeOf(ref('AuthSession'))),
+          ...problemResponses([400, 409, 429]),
         },
       },
     },
@@ -164,9 +240,10 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
       post: {
         tags: ['auth'],
         summary: 'Login with email and password',
+        requestBody: jsonBody('LoginRequest'),
         responses: {
-          200: { description: 'Access and refresh tokens' },
-          ...errorResponses([400, 401, 429]),
+          200: jsonResponse('Access and refresh tokens', envelopeOf(ref('AuthSession'))),
+          ...problemResponses([400, 401, 429]),
         },
       },
     },
@@ -174,14 +251,19 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
       post: {
         tags: ['auth'],
         summary: 'Rotate refresh token (reuse detection)',
-        responses: { 200: { description: 'New token pair' }, ...errorResponses([401]) },
+        requestBody: jsonBody('RefreshRequest'),
+        responses: {
+          200: jsonResponse('New token pair', envelopeOf(ref('RefreshResult'))),
+          ...problemResponses([400, 401]),
+        },
       },
     },
     '/v1/auth/logout': {
       post: {
         tags: ['auth'],
         summary: 'Revoke refresh token',
-        responses: { 204: { description: 'Revoked' }, ...errorResponses([401]) },
+        requestBody: jsonBody('RefreshRequest'),
+        responses: { 204: { description: 'Revoked' }, ...problemResponses([400, 401]) },
       },
     },
     '/v1/api-keys': {
@@ -189,28 +271,23 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['auth'],
         summary: 'Create API key (key shown once, stored as hash)',
         security: [{ bearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['name'],
-                properties: { name: { type: 'string', minLength: 1, maxLength: 100 } },
-              },
-            },
-          },
-        },
+        requestBody: jsonBody('CreateApiKeyRequest'),
         responses: {
-          201: { description: 'API key created (key shown once)' },
-          ...errorResponses([400, 401]),
+          201: jsonResponse(
+            'API key created; apiKey is returned once',
+            envelopeOf(ref('ApiKeyCreated')),
+          ),
+          ...problemResponses([400, 401]),
         },
       },
       get: {
         tags: ['auth'],
         summary: 'List own API keys (no raw key)',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'API keys' }, ...errorResponses([401]) },
+        responses: {
+          200: jsonResponse('API keys', envelopeOf({ type: 'array', items: ref('ApiKey') })),
+          ...problemResponses([401]),
+        },
       },
     },
     '/v1/api-keys/{id}': {
@@ -218,8 +295,8 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['auth'],
         summary: 'Revoke API key',
         security: [{ bearerAuth: [] }],
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 204: { description: 'Revoked' }, ...errorResponses([401, 403, 404]) },
+        parameters: [pathId],
+        responses: { 204: { description: 'Revoked' }, ...problemResponses([401, 403, 404]) },
       },
     },
     '/v1/events': {
@@ -230,14 +307,7 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
           { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Full-text search' },
           { name: 'category', in: 'query', schema: { type: 'string' } },
           { name: 'city', in: 'query', schema: { type: 'string' } },
-          {
-            name: 'status',
-            in: 'query',
-            schema: {
-              type: 'string',
-              enum: ['DRAFT', 'SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'ENDED'],
-            },
-          },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: eventStatusEnum } },
           { name: 'date_from', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'date_to', in: 'query', schema: { type: 'string', format: 'date-time' } },
           { name: 'price_min', in: 'query', schema: { type: 'integer' } },
@@ -254,33 +324,30 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
             schema: { type: 'string' },
             description: 'Allowlist projection',
           },
-          {
-            name: 'include',
-            in: 'query',
-            schema: { type: 'string', enum: ['tiers'] },
-          },
+          { name: 'include', in: 'query', schema: { type: 'string', enum: ['tiers'] } },
           { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
           {
             name: 'cursor',
             in: 'query',
             schema: { type: 'string' },
-            description: 'Opaque keyset cursor',
+            description: 'Opaque keyset cursor; cannot be combined with page',
           },
         ],
         responses: {
-          200: {
-            description: 'Event list',
-            content: { 'application/json': { schema: envelope({ type: 'array', items: {} }) } },
-          },
-          ...errorResponses([400]),
+          200: jsonResponse('Event list', envelopeOf({ type: 'array', items: ref('Event') })),
+          ...problemResponses([400, 429]),
         },
       },
       post: {
         tags: ['events'],
         summary: 'Create event (admin)',
         security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
-        responses: { 201: { description: 'Created' }, ...errorResponses([400, 401, 403]) },
+        requestBody: jsonBody('CreateEventRequest'),
+        responses: {
+          201: jsonResponse('Created', envelopeOf(ref('EventCreateResult'))),
+          ...problemResponses([400, 401, 403]),
+        },
       },
     },
     '/v1/events/{id}': {
@@ -288,27 +355,34 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['events'],
         summary: 'Event detail with ETag/304 support',
         parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          pathId,
           { name: 'include', in: 'query', schema: { type: 'string', enum: ['tiers'] } },
           { name: 'If-None-Match', in: 'header', schema: { type: 'string' } },
         ],
         responses: {
-          200: { description: 'Event detail' },
+          200: {
+            ...jsonResponse('Event detail', envelopeOf(ref('EventDetail'))),
+            headers: { ETag: { schema: { type: 'string' } } },
+          },
           304: { description: 'Not modified' },
-          ...errorResponses([404]),
+          ...problemResponses([404]),
         },
       },
       patch: {
         tags: ['events'],
         summary: 'Partial update with server-side $set/$unset (admin)',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Updated' }, ...errorResponses([400, 401, 403, 404]) },
+        requestBody: jsonBody('PatchEventRequest'),
+        responses: {
+          200: jsonResponse('Updated', envelopeOf(ref('EventPatchResult'))),
+          ...problemResponses([400, 401, 403, 404]),
+        },
       },
       delete: {
         tags: ['events'],
         summary: 'Soft delete (admin)',
         security: [{ bearerAuth: [] }],
-        responses: { 204: { description: 'Deleted' }, ...errorResponses([401, 403, 404]) },
+        responses: { 204: { description: 'Deleted' }, ...problemResponses([401, 403, 404]) },
       },
     },
     '/v1/events/{id}/tiers/bulk': {
@@ -316,23 +390,33 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['events'],
         summary: 'Bulk create tiers with bulkWrite (admin)',
         security: [{ bearerAuth: [] }],
-        responses: { 201: { description: 'Created' }, ...errorResponses([400, 401, 403, 404]) },
+        requestBody: jsonBody('BulkTiersRequest'),
+        responses: {
+          201: jsonResponse('Created', envelopeOf(ref('BulkTiersResult'))),
+          ...problemResponses([400, 401, 403, 404]),
+        },
       },
     },
     '/v1/events/{id}/stream': {
       get: {
         tags: ['events'],
         summary: 'SSE stock stream for an event',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'text/event-stream' } },
+        parameters: [pathId],
+        responses: {
+          200: sseResponse('Server-sent stock updates', ['ready', 'message', 'heartbeat']),
+          ...problemResponses([404, 503]),
+        },
       },
     },
     '/v1/events/{id}/stats': {
       get: {
         tags: ['events'],
         summary: 'Read model stats: sold and revenue for an event',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Event stats' }, ...errorResponses([404]) },
+        parameters: [pathId],
+        responses: {
+          200: jsonResponse('Event stats', envelopeOf(ref('EventStats'))),
+          ...problemResponses([404]),
+        },
       },
     },
     '/v1/orders': {
@@ -340,24 +424,41 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['orders'],
         summary: 'Create order (requires Idempotency-Key)',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'Idempotency-Key',
-            in: 'header',
-            required: true,
-            schema: { type: 'string', minLength: 8 },
-          },
-        ],
+        parameters: [idempotencyHeader],
+        requestBody: jsonBody('CreateOrderRequest'),
         responses: {
-          201: { description: 'Order created' },
-          ...errorResponses([400, 401, 403, 409, 422, 429, 503]),
+          201: jsonResponse('Order created', envelopeOf(ref('OrderResult'))),
+          ...problemResponses([400, 401, 403, 409, 422, 429, 503]),
         },
       },
       get: {
         tags: ['orders'],
         summary: 'List own orders with cursor pagination',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Orders' }, ...errorResponses([400, 401]) },
+        parameters: [
+          {
+            name: 'status',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: [
+                'PENDING_PAYMENT',
+                'PAYMENT_QUEUED',
+                'PAID',
+                'CONFIRMED',
+                'PAYMENT_FAILED',
+                'EXPIRED',
+                'CANCELLED',
+              ],
+            },
+          },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: jsonResponse('Orders', envelopeOf({ type: 'array', items: ref('Order') })),
+          ...problemResponses([400, 401]),
+        },
       },
     },
     '/v1/orders/{id}': {
@@ -365,7 +466,11 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['orders'],
         summary: 'Order detail',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Order' }, ...errorResponses([401, 403, 404]) },
+        parameters: [pathId],
+        responses: {
+          200: jsonResponse('Order', envelopeOf(ref('OrderResult'))),
+          ...problemResponses([401, 403, 404]),
+        },
       },
     },
     '/v1/orders/{id}/pay': {
@@ -373,18 +478,12 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['orders'],
         summary: 'Request payment (200 paid, 202 queued)',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'Idempotency-Key',
-            in: 'header',
-            required: true,
-            schema: { type: 'string', minLength: 8 },
-          },
-        ],
+        parameters: [pathId, idempotencyHeader],
+        requestBody: jsonBody('PayRequest'),
         responses: {
-          200: { description: 'Payment accepted synchronously' },
-          202: { description: 'Payment queued for retry' },
-          ...errorResponses([400, 401, 403, 409, 422, 429]),
+          200: jsonResponse('Payment accepted synchronously', envelopeOf(ref('PayResult'))),
+          202: jsonResponse('Payment queued for retry', envelopeOf(ref('PayResult'))),
+          ...problemResponses([400, 401, 403, 409, 422, 429]),
         },
       },
     },
@@ -393,7 +492,12 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['orders'],
         summary: 'Cancel order and release stock',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Cancelled' }, ...errorResponses([401, 403, 409]) },
+        parameters: [pathId],
+        requestBody: jsonBody('CancelOrderRequest', false),
+        responses: {
+          200: jsonResponse('Cancelled', envelopeOf(ref('OrderCancelResult'))),
+          ...problemResponses([401, 403, 409]),
+        },
       },
     },
     '/v1/orders/{id}/stream': {
@@ -401,9 +505,10 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['orders'],
         summary: 'SSE order status stream (owner only)',
         security: [{ bearerAuth: [] }],
+        parameters: [pathId],
         responses: {
-          200: { description: 'text/event-stream' },
-          ...errorResponses([401, 403, 404]),
+          200: sseResponse('Server-sent order status updates', ['ready', 'message', 'heartbeat']),
+          ...problemResponses([401, 403, 404]),
         },
       },
     },
@@ -412,7 +517,14 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['tickets'],
         summary: 'List own tickets',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Tickets' }, ...errorResponses([401]) },
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: jsonResponse('Tickets', envelopeOf({ type: 'array', items: ref('Ticket') })),
+          ...problemResponses([401]),
+        },
       },
     },
     '/v1/tickets/{id}': {
@@ -420,7 +532,11 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['tickets'],
         summary: 'Ticket detail with short-lived presigned QR URL',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Ticket' }, ...errorResponses([401, 404]) },
+        parameters: [pathId],
+        responses: {
+          200: jsonResponse('Ticket', envelopeOf(ref('TicketDetail'))),
+          ...problemResponses([401, 404]),
+        },
       },
     },
     '/v1/webhooks/endpoints': {
@@ -428,13 +544,23 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['webhooks'],
         summary: 'Register webhook endpoint (secret shown once)',
         security: [{ bearerAuth: [] }],
-        responses: { 201: { description: 'Created' }, ...errorResponses([400, 401, 403]) },
+        requestBody: jsonBody('CreateWebhookRequest'),
+        responses: {
+          201: jsonResponse('Created; secret is returned once', envelopeOf(ref('WebhookCreated'))),
+          ...problemResponses([400, 401, 403]),
+        },
       },
       get: {
         tags: ['webhooks'],
         summary: 'List own webhook endpoints without secrets',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Endpoints' }, ...errorResponses([401]) },
+        responses: {
+          200: jsonResponse(
+            'Endpoints',
+            envelopeOf({ type: 'array', items: ref('WebhookEndpoint') }),
+          ),
+          ...problemResponses([401]),
+        },
       },
     },
     '/v1/webhooks/endpoints/{id}': {
@@ -442,7 +568,8 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['webhooks'],
         summary: 'Deactivate webhook endpoint',
         security: [{ bearerAuth: [] }],
-        responses: { 204: { description: 'Deactivated' }, ...errorResponses([401]) },
+        parameters: [pathId],
+        responses: { 204: { description: 'Deactivated' }, ...problemResponses([401]) },
       },
     },
     '/health': {
@@ -467,7 +594,10 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['debug'],
         summary: 'SSE trace stream (admin + DEBUG_ENABLED)',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'text/event-stream' }, ...errorResponses([401, 403]) },
+        responses: {
+          200: sseResponse('Server-sent trace events', ['ready', 'message', 'heartbeat']),
+          ...problemResponses([401, 403]),
+        },
       },
     },
     '/debug/load': {
@@ -475,15 +605,20 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         tags: ['debug'],
         summary: 'Run built-in load generator (single|crowd|abuse)',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Summary' }, ...errorResponses([400, 401, 403]) },
+        requestBody: jsonBody('DebugLoadRequest'),
+        responses: { 200: { description: 'Summary' }, ...problemResponses([400, 401, 403]) },
       },
     },
     '/debug/chaos': {
       post: {
         tags: ['debug'],
-        summary: 'Toggle dependency failure or latency',
+        summary: 'Inject dependency failure or latency (auto-recovers)',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Chaos state' }, ...errorResponses([400, 401, 403]) },
+        requestBody: jsonBody('DebugChaosRequest'),
+        responses: {
+          200: jsonResponse('Chaos state', envelopeOf(ref('ChaosState'))),
+          ...problemResponses([400, 401, 403]),
+        },
       },
     },
   },

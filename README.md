@@ -168,6 +168,39 @@ Detil operasional dan recovery: `docs/runbook.md`.
 
 ---
 
+## Kontrak API untuk klien (frontend)
+
+OpenAPI dihasilkan dari Zod, jadi bukan lagi inventaris endpoint saja:
+
+```bash
+just api-types      # = bun run scripts/gen-api-types.ts
+```
+
+Menulis dua artefak:
+
+| Berkas                | Isi                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `docs/openapi.json`   | OpenAPI 3.0.3: 26 path, 39 schema, request body, response envelope, `Problem`, header rate limit/ETag, SSE |
+| `docs/api-types.d.ts` | Tipe TypeScript siap pakai: `components['schemas']['Order']`, `paths['/v1/orders']['post']`                |
+
+Kedua berkas dihasilkan — jangan diedit manual. Jalankan ulang setelah mengubah `src/modules/schemas.ts` atau `src/modules/docs/models.ts`.
+
+Endpoint kontrak saat runtime:
+
+- `GET /openapi.json` — dokumen yang sama persis dengan `docs/openapi.json`.
+- `GET /docs` — Swagger UI.
+
+Catatan integrasi frontend:
+
+- Auth: `Authorization: Bearer <accessToken>`; refresh via `POST /v1/auth/refresh` (rotasi token, reuse terdeteksi).
+- Mutasi order dan pay wajib `Idempotency-Key`.
+- Sukses selalu `{ data, meta, links }`; error selalu `application/problem+json`.
+- Uang integer rupiah, waktu ISO 8601 UTC.
+- SSE: `GET /v1/events/:id/stream` dan `GET /v1/orders/:id/stream`, frame `event: ready|message|heartbeat`.
+- Tambahkan origin frontend ke `CORS_ORIGINS` sebelum memanggil dari browser.
+
+---
+
 ## Dokumentasi
 
 - `docs/architecture.md` — komponen, order + stok Lua, outbox + saga, sharding, cache, rate limit, observability, read model, feature flags.
@@ -176,4 +209,5 @@ Detil operasional dan recovery: `docs/runbook.md`.
 - `docs/adr/` — Architecture Decision Records, termasuk keputusan OTel/BullMQ.
 - `docs/benchmarks/` — hasil load test nyata sebelum/sesudah cache.
 - `docs/postman/` — koleksi request Postman (auth, events, orders, pay, SSE, API key).
+- `docs/openapi.json` / `docs/api-types.d.ts` — kontrak OpenAPI dan tipe klien hasil generate.
 - `AGENTS.md` — konvensi repo untuk coding agent.

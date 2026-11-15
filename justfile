@@ -73,6 +73,9 @@ dlq-replay:
 gen-tokens:
     bun run scripts/gen-tokens.ts
 
+api-types:
+    bun run scripts/gen-api-types.ts
+
 load scenario:
     k6 run load/{{scenario}}.js
 

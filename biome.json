@@ -2,7 +2,15 @@
   "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/dist", "!**/coverage", "!docs/benchmarks"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!docs/benchmarks",
+      "!docs/api-types.d.ts",
+      "!docs/openapi.json"
+    ]
   },
   "formatter": {
     "enabled": true,
