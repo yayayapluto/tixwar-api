@@ -23,6 +23,7 @@ import { createSlowMotionMiddleware } from './middleware/slowMotion.ts';
 
 const INTERNAL_PATHS = new Set(['/health', '/ready', '/metrics', '/openapi.json']);
 
+import { createApiKeysRouter } from './modules/apikeys/routes.ts';
 import { createAuthRouter } from './modules/auth/routes.ts';
 import type { TokenService } from './modules/auth/service.ts';
 import { createDebugRouter } from './modules/debug/routes.ts';
@@ -96,6 +97,7 @@ export const createApp = (deps: AppDeps): Express => {
   v1.use(maybeAuth);
   v1.use(createSlowMotionMiddleware(deps.env));
   v1.use('/auth', createAuthRouter(deps));
+  v1.use('/api-keys', createApiKeysRouter(deps, auth));
   v1.use('/events', createEventsRouter(deps, deps.events));
   v1.use(
     '/orders',

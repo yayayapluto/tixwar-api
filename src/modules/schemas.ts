@@ -95,6 +95,12 @@ export const createWebhookSchema = z
   })
   .strict();
 
+export const createApiKeySchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
 export const objectId = (value: string): boolean => objectIdPattern.test(value);
 
 const ORDER_STATUS_VALUES = [
@@ -353,4 +359,5 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type CreateWebhookInput = z.infer<typeof createWebhookSchema>;
+export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 export type CancelOrderInput = z.infer<typeof cancelOrderSchema>;

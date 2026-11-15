@@ -184,6 +184,44 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         responses: { 204: { description: 'Revoked' }, ...errorResponses([401]) },
       },
     },
+    '/v1/api-keys': {
+      post: {
+        tags: ['auth'],
+        summary: 'Create API key (key shown once, stored as hash)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string', minLength: 1, maxLength: 100 } },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'API key created (key shown once)' },
+          ...errorResponses([400, 401]),
+        },
+      },
+      get: {
+        tags: ['auth'],
+        summary: 'List own API keys (no raw key)',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'API keys' }, ...errorResponses([401]) },
+      },
+    },
+    '/v1/api-keys/{id}': {
+      delete: {
+        tags: ['auth'],
+        summary: 'Revoke API key',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 204: { description: 'Revoked' }, ...errorResponses([401, 403, 404]) },
+      },
+    },
     '/v1/events': {
       get: {
         tags: ['events'],
