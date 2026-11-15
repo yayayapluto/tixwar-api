@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { MongoServerError } from 'mongodb';
 import { ZodError } from 'zod';
+import { captureError } from '../infra/sentry.ts';
 import { createLogger } from '../shared/logger.ts';
 import { AppError, internalError, toProblem } from '../shared/problem.ts';
 
@@ -87,6 +88,7 @@ export const errorHandler = (
 
   if (appError.status >= 500) {
     logger.error({ err: error, requestId: req.requestId, path: req.originalUrl }, 'request failed');
+    captureError(error);
   } else {
     logger.debug(
       { code: appError.code, requestId: req.requestId, path: req.originalUrl },

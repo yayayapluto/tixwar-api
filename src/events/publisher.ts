@@ -1,3 +1,4 @@
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { Env } from '../config/env.ts';
 import type { Collections } from '../infra/db/collections.ts';
 import type { OutboxEventDoc } from '../infra/db/types.ts';
@@ -66,8 +67,23 @@ export const enqueueOutboxEvent = async (
   if (!queueName) throw new Error(`no queue mapped for event type ${doc.type}`);
   const queue = queues.queues[queueName];
   const envelope = toEnvelope(doc);
-  await queue.add(doc.type, { ...envelope }, { jobId: deterministicJobId(doc._id) });
-  return queueName;
+  const carrier = { traceparent: doc.payload.traceparent };
+  const parentCtx =
+    typeof doc.payload.traceparent === 'string'
+      ? propagation.extract(context.active(), carrier)
+      : context.active();
+  const tracer = trace.getTracer('tixwar');
+  const span = tracer.startSpan(`outbox.enqueue ${doc.type}`, undefined, parentCtx);
+  try {
+    await queue.add(doc.type, { ...envelope }, { jobId: deterministicJobId(doc._id) });
+    return queueName;
+  } catch (error) {
+    span.recordException(error instanceof Error ? error : new Error(String(error)));
+    span.setStatus({ code: SpanStatusCode.ERROR });
+    throw error;
+  } finally {
+    span.end();
+  }
 };
 
 export const publishBatch = async (deps: PublisherDeps): Promise<PublishResult> => {

@@ -127,6 +127,7 @@ export const envSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   OTEL_SERVICE_NAME: z.string().default('tixwar'),
   SENTRY_DSN: z.string().optional(),
+  METRICS_PORT: z.coerce.number().int().positive().default(9464),
   TRACE_TTL_DAYS: z.coerce.number().int().positive().default(30),
   TRACE_CHANNEL: z.string().default('trace'),
 

@@ -1,11 +1,15 @@
+import './infra/tracing.ts';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import { type Job, Worker } from 'bullmq';
 import type { Container } from './bootstrap.ts';
 import { createContainer } from './bootstrap.ts';
 import { getEnv } from './config/env.ts';
 import { buildHandlers } from './events/handlers.ts';
 import { metrics } from './infra/metrics/registry.ts';
+import { startMetricsServer } from './infra/metrics/server.ts';
 import type { EventJobData } from './infra/queue/queues.ts';
 import { QUEUE_NAMES, type QueueName, queueDepthFor, workerOptions } from './infra/queue/queues.ts';
+import { stopTracing } from './infra/tracing.ts';
 import { createLogger } from './shared/logger.ts';
 
 const logger = createLogger('worker');
@@ -62,8 +66,20 @@ const main = async (): Promise<void> => {
           throw new Error('chaos: injected worker failure');
         }
         const startedAt = Date.now();
+        const carrier = { traceparent: job.data.data.traceparent };
+        const parentCtx =
+          typeof job.data.data.traceparent === 'string'
+            ? propagation.extract(context.active(), carrier)
+            : context.active();
+        const span = trace
+          .getTracer('tixwar')
+          .startSpan(`bullmq.${name}.${job.data.type}`, undefined, parentCtx);
+        span.setAttribute('messaging.system', 'bullmq');
+        span.setAttribute('messaging.destination', queueName);
+        span.setAttribute('messaging.operation', 'process');
         try {
           await handler(job.data);
+          span.setStatus({ code: SpanStatusCode.OK });
           await container.trace.record({
             requestId: job.data.requestId,
             node: 'worker',
@@ -73,6 +89,8 @@ const main = async (): Promise<void> => {
             meta: { queue: name, type: job.data.type, jobId: job.id },
           });
         } catch (error) {
+          span.recordException(error instanceof Error ? error : new Error(String(error)));
+          span.setStatus({ code: SpanStatusCode.ERROR });
           await container.trace.record({
             requestId: job.data.requestId,
             node: 'worker',
@@ -87,6 +105,8 @@ const main = async (): Promise<void> => {
             },
           });
           throw error;
+        } finally {
+          span.end();
         }
       },
       workerOptions(env, name, container.redis),
@@ -138,14 +158,17 @@ const main = async (): Promise<void> => {
   void expiryLoop();
 
   logger.info({ workers: workers.length }, 'worker started');
+  const metricsServer = startMetricsServer(env.METRICS_PORT);
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, 'worker draining');
+    metricsServer.close();
     await Promise.allSettled(workers.map((worker) => worker.close()));
     await container.shutdown();
+    await stopTracing();
     process.exit(0);
   };
 

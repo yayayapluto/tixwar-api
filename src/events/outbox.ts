@@ -1,3 +1,4 @@
+import { context, propagation } from '@opentelemetry/api';
 import type { ClientSession } from 'mongodb';
 import type { Collections } from '../infra/db/collections.ts';
 import type { OutboxEventDoc } from '../infra/db/types.ts';
@@ -42,13 +43,17 @@ export interface OutboxWriteInput {
 
 export const buildOutboxDoc = (input: OutboxWriteInput): OutboxEventDoc => {
   const now = input.occurredAt ?? new Date();
+  const carrier: Record<string, unknown> = {};
+  propagation.inject(context.active(), carrier);
+  const payload = { ...input.payload };
+  if (typeof carrier.traceparent === 'string') payload.traceparent = carrier.traceparent;
   return {
     _id: newOutboxEventId(),
     userId: input.userId,
     aggregateType: input.aggregateType,
     aggregateId: input.aggregateId,
     type: input.type,
-    payload: input.payload,
+    payload,
     status: 'PENDING',
     attempts: 0,
     createdAt: now,

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "TixWar \u2014 flash sale ticketing API (backend only)",
+  "description": "TixWar — flash sale ticketing API (backend only)",
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
@@ -25,6 +25,10 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@opentelemetry/auto-instrumentations-node": "^0.83.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.2",
+    "@opentelemetry/sdk-node": "^0.301.2",
+    "@sentry/bun": "^11.12.0",
     "bullmq": "^6.7.6",
     "compression": "^1.8.2",
     "cors": "^2.8.6",

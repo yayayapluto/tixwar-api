@@ -1,7 +1,10 @@
+import './infra/tracing.ts';
+import './infra/sentry.ts';
 import { createApp } from './app.ts';
 import { createContainer } from './bootstrap.ts';
 import { getEnv } from './config/env.ts';
 import { startShardMetricsLoop } from './infra/db/shard-metrics.ts';
+import { stopTracing } from './infra/tracing.ts';
 import { startPrewarmLoop } from './modules/stock/prewarm.ts';
 import { startReconcileLoop } from './modules/stock/reconcile.ts';
 import { createLogger } from './shared/logger.ts';
@@ -35,6 +38,7 @@ const main = async (): Promise<void> => {
       setTimeout(() => resolve(), 10000);
     });
     await container.shutdown();
+    await stopTracing();
     logger.info('graceful shutdown complete');
     process.exit(0);
   };
