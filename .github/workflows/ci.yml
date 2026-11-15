@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Biome, TypeScript, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Biome check
+        run: bunx biome check .
+
+      - name: TypeScript check
+        run: bunx tsc --noEmit
+
+      - name: Unit tests
+        run: bun test tests/unit
+
+  integration:
+    name: Integration tests (sharded cluster + Redis)
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Start sharded MongoDB cluster and Redis
+        run: |
+          docker compose up -d \
+            mongo-config-1 mongo-config-2 mongo-config-3 \
+            mongo-shard-0 mongo-shard-1 mongo-shard-2 \
+            mongos mongo-init redis
+
+      - name: Wait for mongos and redis
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T mongos mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null | grep -q 1; then
+              echo "mongos ready"
+              break
+            fi
+            sleep 2
+          done
+          docker compose exec -T redis redis-cli ping
+
+      - name: Integration tests
+        env:
+          MONGODB_URI: mongodb://localhost:27017/tixwar_test?retryWrites=true&w=majority
+          REDIS_URL: redis://localhost:6379/1
+        run: bun test tests/integration
+
+  build:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build

@@ -1,0 +1,75 @@
+groups:
+  - name: tixwar
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: max by (name) (circuit_breaker_state) == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker {{ $labels.name }} is open"
+          description: "Breaker has been open for more than one minute."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx error rate above 5%"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: OutboxBacklog
+        expr: max(outbox_pending) > 500
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox backlog is growing"
+          description: "outbox_pending is {{ $value }}."
+
+      - alert: DeadLetterQueueNotEmpty
+        expr: max(queue_depth{queue="dlq"}) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLQ is not empty"
+          description: 'queue_depth{queue="dlq"} is {{ $value }}.'
+
+      - alert: StockReconcileDrift
+        expr: max(abs(stock_reconcile_drift)) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stock reconciliation drift detected for tier {{ $labels.tier }}"
+          description: "Redis stock gate differs from durable stock by {{ $value }}."
+
+      - alert: MongoNotReady
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB exporter cannot reach mongos"
+
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API instance {{ $labels.instance }} is down"
+
+      - alert: ReplicaLagHigh
+        expr: max(mongodb_mongod_replset_member_replication_lag) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replica lag above 10 seconds"
+          description: "Observed lag {{ $value }}s on {{ $labels.instance }}."
