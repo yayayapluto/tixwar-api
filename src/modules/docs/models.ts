@@ -107,6 +107,13 @@ export const eventDetailSchema = eventSchema
   .extend({ tiers: z.array(tierSchema).optional() })
   .strict();
 
+export const eventListItemSchema = eventSchema
+  .extend({
+    minPrice: z.number().int().nullable(),
+    maxPrice: z.number().int().nullable(),
+  })
+  .strict();
+
 export const eventCreateResultSchema = z
   .object({
     id: z.string(),

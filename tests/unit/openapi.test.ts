@@ -48,6 +48,29 @@ describe('openapi document', () => {
     expect(missing).toEqual([]);
   });
 
+  it('exposes the tier price range on event list items', () => {
+    const schema = document.components.schemas.EventListItem as Record<string, unknown>;
+    expect(schema, 'EventListItem').toBeDefined();
+    const properties = schema.properties as Record<string, Record<string, unknown>>;
+    for (const field of ['minPrice', 'maxPrice']) {
+      expect(properties[field], `EventListItem.${field}`).toEqual({
+        type: 'integer',
+        nullable: true,
+        minimum: -9007199254740991,
+        maximum: 9007199254740991,
+      });
+    }
+    expect((schema.required as string[]).sort()).toEqual(
+      expect.arrayContaining(['minPrice', 'maxPrice']),
+    );
+    const op = operation('/v1/events', 'get');
+    const responses = op.responses as Record<string, Record<string, unknown>>;
+    const listSchema = contentSchema(responses['200']) as Record<string, unknown>;
+    const items = (listSchema.properties as Record<string, Record<string, unknown>>).data
+      .items as Record<string, unknown>;
+    expect(items.$ref).toBe('#/components/schemas/EventListItem');
+  });
+
   it('declares a request body for every mutating endpoint that accepts one', () => {
     const endpoints: Array<[string, string, string]> = [
       ['/v1/auth/register', 'post', 'RegisterRequest'],

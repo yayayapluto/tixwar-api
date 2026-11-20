@@ -12,9 +12,11 @@ import {
   buildEventSort,
   buildProjection,
   type EventListQuery,
+  type EventPriceRange,
   normalizeCacheQuery,
   pickFields,
   serializeEvent,
+  serializeEventWithPrice,
 } from './query.ts';
 
 export interface EventListResult {
@@ -47,6 +49,30 @@ const resolveTierIdsByPrice = async (
     .find({ price: range }, { projection: { eventId: 1 }, limit: PRICE_TIER_LOOKUP_LIMIT })
     .toArray();
   return Array.from(new Set(tiers.map((tier) => tier.eventId)));
+};
+
+const loadPriceRanges = async (
+  collections: Collections,
+  eventIds: string[],
+): Promise<Map<string, EventPriceRange>> => {
+  const ranges = new Map<string, EventPriceRange>();
+  if (eventIds.length === 0) return ranges;
+  const rows = await collections.ticketTiers
+    .aggregate<{ _id: string; minPrice: number; maxPrice: number }>([
+      { $match: { eventId: { $in: eventIds } } },
+      {
+        $group: {
+          _id: '$eventId',
+          minPrice: { $min: '$price' },
+          maxPrice: { $max: '$price' },
+        },
+      },
+    ])
+    .toArray();
+  for (const row of rows) {
+    ranges.set(row._id, { minPrice: row.minPrice, maxPrice: row.maxPrice });
+  }
+  return ranges;
 };
 
 const serializeTier = (tier: TicketTierDoc): Record<string, unknown> => ({
@@ -82,6 +108,17 @@ export class EventService {
     );
     if (!cached.value) throw notFound('Event list is unavailable');
     return { ...cached.value, cacheHit: cached.hit };
+  }
+
+  private async serializeListPage(
+    docs: EventDoc[],
+    fields?: string[],
+  ): Promise<Array<Record<string, unknown>>> {
+    const prices = await loadPriceRanges(
+      this.collections,
+      docs.map((doc) => doc._id),
+    );
+    return docs.map((doc) => pickFields(serializeEventWithPrice(doc, prices.get(doc._id)), fields));
   }
 
   private async loadList(
@@ -132,7 +169,7 @@ export class EventService {
             })
           : null;
       return {
-        data: page.map((doc) => pickFields(serializeEvent(doc), query.fields)),
+        data: await this.serializeListPage(page, query.fields),
         limit: query.limit,
         nextCursor,
         hasMore,
@@ -154,7 +191,7 @@ export class EventService {
     ]);
 
     return {
-      data: docs.map((doc) => pickFields(serializeEvent(doc), query.fields)),
+      data: await this.serializeListPage(docs, query.fields),
       page,
       limit: query.limit,
       total: total >= 0 ? total : undefined,
