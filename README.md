@@ -33,7 +33,7 @@ Redis adalah _atomic stock gate_; MongoDB adalah catatan durable. Detil lengkap:
 ## Prasyarat
 
 - [Bun](https://bun.sh) `>= 1.3` (runtime, test runner, package manager).
-- [Docker](https://www.docker.com/) + Docker Compose v2 (cluster MongoDB sharded, Redis, dan stack observability).
+- [Docker](https://www.docker.com/) + Docker Compose v2 (cluster MongoDB sharded, Redis, dan stack observability) — atau [Podman](https://podman.io/) rootless sebagai alternatif, lihat `docs/podman.md`.
 - [just](https://github.com/casey/just) (command runner; opsional — semua target bisa dijalankan manual).
 - [k6](https://k6.io/) (opsional, hanya untuk load test).
 
@@ -81,6 +81,20 @@ just up-ha              # = docker compose --profile ha up -d --build
 ```
 
 > Topologi lokal memakai **satu anggota per shard**. Ini membuktikan native sharding dan transaksi replica-set, tetapi **bukan** high availability node-level. Secondary read preference hanya terbukti pada profil `ha`.
+
+### Podman (alternatif Docker)
+
+Stack yang sama bisa dijalankan rootless dengan Podman, tanpa Docker daemon:
+
+```bash
+just podman-up          # = podman compose -f podman-compose.yml up -d --build
+just podman-up-ha       # = podman compose -f podman-compose.yml --profile ha up -d --build
+```
+
+Satu-satunya service yang dihilangkan dari `podman-compose.yml` adalah
+`promtail` (butuh socket Docker). Statusnya **eksperimental dan belum
+terverifikasi di VM dev** — detail instalasi, perbedaan dengan Docker
+Compose, dan keterbatasannya ada di `docs/podman.md`.
 
 ---
 
