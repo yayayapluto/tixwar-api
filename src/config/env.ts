@@ -113,6 +113,9 @@ export const envSchema = z.object({
   SMTP_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
   MAIL_FROM: z.string().default('TixWar <no-reply@tixwar.local>'),
 
+  PASSWORD_RESET_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  WEB_URL: z.string().default('http://localhost:3000'),
+
   MINIO_ENDPOINT: z.string().default('minio'),
   MINIO_PORT: z.coerce.number().int().positive().default(9000),
   MINIO_USE_SSL: boolEnv('false'),

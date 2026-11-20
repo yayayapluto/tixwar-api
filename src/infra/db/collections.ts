@@ -7,6 +7,7 @@ import type {
   IdempotencyKeyDoc,
   OrderDoc,
   OutboxEventDoc,
+  PasswordResetTokenDoc,
   PaymentDoc,
   ProcessedEventDoc,
   RefreshTokenDoc,
@@ -29,6 +30,7 @@ export const SHARDED_COLLECTIONS = [
 export const UNSHARDED_COLLECTIONS = [
   'users',
   'refreshTokens',
+  'passwordResetTokens',
   'apiKeys',
   'events',
   'ticketTiers',
@@ -40,6 +42,7 @@ export const UNSHARDED_COLLECTIONS = [
 export const COLLECTIONS = {
   users: 'users',
   refreshTokens: 'refreshTokens',
+  passwordResetTokens: 'passwordResetTokens',
   apiKeys: 'apiKeys',
   events: 'events',
   ticketTiers: 'ticketTiers',
@@ -58,6 +61,7 @@ export const COLLECTIONS = {
 export interface Collections {
   users: Collection<UserDoc>;
   refreshTokens: Collection<RefreshTokenDoc>;
+  passwordResetTokens: Collection<PasswordResetTokenDoc>;
   apiKeys: Collection<ApiKeyDoc>;
   events: Collection<EventDoc>;
   ticketTiers: Collection<TicketTierDoc>;
@@ -76,6 +80,7 @@ export interface Collections {
 export const getCollections = (db: Db): Collections => ({
   users: db.collection<UserDoc>(COLLECTIONS.users),
   refreshTokens: db.collection<RefreshTokenDoc>(COLLECTIONS.refreshTokens),
+  passwordResetTokens: db.collection<PasswordResetTokenDoc>(COLLECTIONS.passwordResetTokens),
   apiKeys: db.collection<ApiKeyDoc>(COLLECTIONS.apiKeys),
   events: db.collection<EventDoc>(COLLECTIONS.events),
   ticketTiers: db.collection<TicketTierDoc>(COLLECTIONS.ticketTiers),

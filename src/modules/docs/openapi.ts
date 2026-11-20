@@ -8,11 +8,13 @@ import {
   createWebhookSchema,
   debugChaosSchema,
   debugLoadSchema,
+  forgotPasswordSchema,
   loginSchema,
   patchEventSchema,
   payOrderSchema,
   refreshSchema,
   registerSchema,
+  resetPasswordSchema,
   tierSchema,
 } from '../schemas.ts';
 import {
@@ -28,6 +30,7 @@ import {
   eventSchema,
   eventStatsSchema,
   linksSchema,
+  messageResultSchema,
   metaSchema,
   orderCancelResultSchema,
   orderResultSchema,
@@ -159,6 +162,8 @@ const requestComponents = {
   RegisterRequest: toJson(registerSchema, 'input'),
   LoginRequest: toJson(loginSchema, 'input'),
   RefreshRequest: toJson(refreshSchema, 'input'),
+  ForgotPasswordRequest: toJson(forgotPasswordSchema, 'input'),
+  ResetPasswordRequest: toJson(resetPasswordSchema, 'input'),
   CreateEventRequest: toJson(createEventSchema, 'input'),
   PatchEventRequest: toJson(patchEventSchema, 'input'),
   TierRequest: toJson(tierSchema, 'input'),
@@ -179,6 +184,7 @@ const responseComponents = {
   User: toJson(userSchema),
   AuthSession: toJson(authSessionSchema),
   RefreshResult: toJson(refreshResultSchema),
+  MessageResult: toJson(messageResultSchema),
   Event: toJson(eventSchema),
   EventDetail: toJson(eventDetailSchema),
   EventListItem: toJson(eventListItemSchema),
@@ -266,6 +272,35 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
         summary: 'Revoke refresh token',
         requestBody: jsonBody('RefreshRequest'),
         responses: { 204: { description: 'Revoked' }, ...problemResponses([400, 401]) },
+      },
+    },
+    '/v1/auth/forgot-password': {
+      post: {
+        tags: ['auth'],
+        summary:
+          'Request a password reset link (generic response, never reveals account existence)',
+        requestBody: jsonBody('ForgotPasswordRequest'),
+        responses: {
+          200: jsonResponse(
+            'Generic confirmation; a link is emailed only if the account exists',
+            envelopeOf(ref('MessageResult')),
+          ),
+          ...problemResponses([400, 429]),
+        },
+      },
+    },
+    '/v1/auth/reset-password': {
+      post: {
+        tags: ['auth'],
+        summary: 'Reset password with a token from the emailed link (single use, expires)',
+        requestBody: jsonBody('ResetPasswordRequest'),
+        responses: {
+          200: jsonResponse(
+            'Password reset; all sessions revoked',
+            envelopeOf(ref('MessageResult')),
+          ),
+          ...problemResponses([400, 401, 429]),
+        },
       },
     },
     '/v1/api-keys': {

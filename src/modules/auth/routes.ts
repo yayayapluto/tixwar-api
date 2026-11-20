@@ -6,14 +6,25 @@ import { buildEnvelope } from '../../shared/http.ts';
 import { createLogger } from '../../shared/logger.ts';
 import { unauthorized } from '../../shared/problem.ts';
 import {
+  type ForgotPasswordInput,
+  forgotPasswordSchema,
   type LoginInput,
   loginSchema,
   type RefreshInput,
   type RegisterInput,
+  type ResetPasswordInput,
   refreshSchema,
   registerSchema,
+  resetPasswordSchema,
 } from '../schemas.ts';
-import { createUser, normalizeEmail, TokenService, verifyPassword } from './service.ts';
+import {
+  createUser,
+  normalizeEmail,
+  requestPasswordReset,
+  resetPassword,
+  TokenService,
+  verifyPassword,
+} from './service.ts';
 
 const logger = createLogger('auth');
 
@@ -137,6 +148,66 @@ export const createAuthRouter = (deps: AppDeps): Router => {
       next(error);
     }
   });
+
+  router.post(
+    '/forgot-password',
+    deps.rateLimiters.middleware('login', (req) => {
+      const email =
+        typeof req.body?.email === 'string' ? normalizeEmail(req.body.email) : 'unknown';
+      return `${clientIp(req)}:${email}`;
+    }),
+    validate({ body: forgotPasswordSchema }),
+    async (req, res, next) => {
+      try {
+        const body = validated<ForgotPasswordInput>(req, 'body');
+        await requestPasswordReset({
+          collections: deps.collections,
+          mailer: deps.notifications,
+          email: body.email,
+          webUrl: deps.env.WEB_URL,
+          ttlSeconds: deps.env.PASSWORD_RESET_TTL_SECONDS,
+          requestId: req.requestId,
+        });
+        res.json(
+          buildEnvelope({
+            data: {
+              message: 'If an account exists for this email, a password reset link has been sent.',
+            },
+            self: '/v1/auth/forgot-password',
+            limit: 1,
+          }),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/reset-password',
+    deps.rateLimiters.middleware('login', (req) => clientIp(req)),
+    validate({ body: resetPasswordSchema }),
+    async (req, res, next) => {
+      try {
+        const body = validated<ResetPasswordInput>(req, 'body');
+        const result = await resetPassword({
+          collections: deps.collections,
+          token: body.token,
+          password: body.password,
+        });
+        await tokens.revokeAllForUser(result.userId);
+        res.json(
+          buildEnvelope({
+            data: { message: 'Password has been reset. You can now log in.' },
+            self: '/v1/auth/reset-password',
+            limit: 1,
+          }),
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 };

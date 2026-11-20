@@ -35,6 +35,15 @@ export interface ApiKeyDoc extends Document {
   revokedAt: Date | null;
 }
 
+export interface PasswordResetTokenDoc extends Document {
+  _id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  createdAt: Date;
+  usedAt: Date | null;
+}
+
 export type EventStatus = 'DRAFT' | 'SCHEDULED' | 'ON_SALE' | 'SOLD_OUT' | 'ENDED';
 
 export interface EventDoc extends Document {
