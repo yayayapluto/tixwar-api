@@ -71,6 +71,27 @@ describe('openapi document', () => {
     expect(items.$ref).toBe('#/components/schemas/EventListItem');
   });
 
+  it('exposes urgency fields on event list items', () => {
+    const schema = document.components.schemas.EventListItem as Record<string, unknown>;
+    expect(schema, 'EventListItem').toBeDefined();
+    const properties = schema.properties as Record<string, Record<string, unknown>>;
+    expect(properties.saleEndsAt, 'EventListItem.saleEndsAt').toEqual({
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+    });
+    for (const field of ['totalQuota', 'totalSold', 'remaining']) {
+      expect(properties[field], `EventListItem.${field}`).toEqual({
+        type: 'integer',
+        minimum: -9007199254740991,
+        maximum: 9007199254740991,
+      });
+    }
+    expect((schema.required as string[]).sort()).toEqual(
+      expect.arrayContaining(['saleEndsAt', 'totalQuota', 'totalSold', 'remaining']),
+    );
+  });
+
   it('declares a request body for every mutating endpoint that accepts one', () => {
     const endpoints: Array<[string, string, string]> = [
       ['/v1/auth/register', 'post', 'RegisterRequest'],

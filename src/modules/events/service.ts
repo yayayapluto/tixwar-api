@@ -12,7 +12,7 @@ import {
   buildEventSort,
   buildProjection,
   type EventListQuery,
-  type EventPriceRange,
+  type EventTierSummary,
   normalizeCacheQuery,
   pickFields,
   serializeEvent,
@@ -51,28 +51,57 @@ const resolveTierIdsByPrice = async (
   return Array.from(new Set(tiers.map((tier) => tier.eventId)));
 };
 
-const loadPriceRanges = async (
+const loadTierSummaries = async (
   collections: Collections,
   eventIds: string[],
-): Promise<Map<string, EventPriceRange>> => {
-  const ranges = new Map<string, EventPriceRange>();
-  if (eventIds.length === 0) return ranges;
+): Promise<Map<string, EventTierSummary>> => {
+  const summaries = new Map<string, EventTierSummary>();
+  if (eventIds.length === 0) return summaries;
   const rows = await collections.ticketTiers
-    .aggregate<{ _id: string; minPrice: number; maxPrice: number }>([
+    .aggregate<{
+      _id: string;
+      minPrice: number;
+      maxPrice: number;
+      saleEndsAt: Date | null;
+      totalQuota: number;
+    }>([
       { $match: { eventId: { $in: eventIds } } },
       {
         $group: {
           _id: '$eventId',
           minPrice: { $min: '$price' },
           maxPrice: { $max: '$price' },
+          saleEndsAt: { $min: '$saleEndsAt' },
+          totalQuota: { $sum: '$quota' },
         },
       },
     ])
     .toArray();
   for (const row of rows) {
-    ranges.set(row._id, { minPrice: row.minPrice, maxPrice: row.maxPrice });
+    summaries.set(row._id, {
+      minPrice: row.minPrice,
+      maxPrice: row.maxPrice,
+      saleEndsAt: row.saleEndsAt,
+      totalQuota: row.totalQuota,
+    });
   }
-  return ranges;
+  return summaries;
+};
+
+const loadSoldCounts = async (
+  collections: Collections,
+  eventIds: string[],
+): Promise<Map<string, number>> => {
+  const sold = new Map<string, number>();
+  if (eventIds.length === 0) return sold;
+  const rows = await collections.tickets
+    .aggregate<{ _id: string; totalSold: number }>([
+      { $match: { eventId: { $in: eventIds } } },
+      { $group: { _id: '$eventId', totalSold: { $sum: 1 } } },
+    ])
+    .toArray();
+  for (const row of rows) sold.set(row._id, row.totalSold);
+  return sold;
 };
 
 const serializeTier = (tier: TicketTierDoc): Record<string, unknown> => ({
@@ -114,11 +143,25 @@ export class EventService {
     docs: EventDoc[],
     fields?: string[],
   ): Promise<Array<Record<string, unknown>>> {
-    const prices = await loadPriceRanges(
-      this.collections,
-      docs.map((doc) => doc._id),
-    );
-    return docs.map((doc) => pickFields(serializeEventWithPrice(doc, prices.get(doc._id)), fields));
+    const eventIds = docs.map((doc) => doc._id);
+    const [summaries, soldCounts] = await Promise.all([
+      loadTierSummaries(this.collections, eventIds),
+      loadSoldCounts(this.collections, eventIds),
+    ]);
+    return docs.map((doc) => {
+      const summary = summaries.get(doc._id);
+      const totalQuota = summary?.totalQuota ?? 0;
+      const totalSold = soldCounts.get(doc._id) ?? 0;
+      return pickFields(
+        serializeEventWithPrice(doc, summary, {
+          saleEndsAt: summary?.saleEndsAt?.toISOString() ?? null,
+          totalQuota,
+          totalSold,
+          remaining: Math.max(0, totalQuota - totalSold),
+        }),
+        fields,
+      );
+    });
   }
 
   private async loadList(

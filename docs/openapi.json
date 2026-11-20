@@ -883,6 +883,26 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "saleEndsAt": {
+            "nullable": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "totalQuota": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "totalSold": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "remaining": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -897,7 +917,11 @@
           "createdAt",
           "updatedAt",
           "minPrice",
-          "maxPrice"
+          "maxPrice",
+          "saleEndsAt",
+          "totalQuota",
+          "totalSold",
+          "remaining"
         ],
         "additionalProperties": false
       },

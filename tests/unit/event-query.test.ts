@@ -117,3 +117,47 @@ describe('event list price range', () => {
     expect(serialized.status).toBe('ON_SALE');
   });
 });
+
+describe('event list urgency', () => {
+  const doc: EventDoc = {
+    _id: 'evt_1',
+    name: 'Jazz Night',
+    description: 'An evening of jazz',
+    category: 'music',
+    city: 'jakarta',
+    venue: 'Hall A',
+    startsAt: new Date('2026-03-01T19:00:00.000Z'),
+    status: 'ON_SALE',
+    searchText: 'jazz night an evening of jazz',
+    createdBy: 'usr_1',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    deletedAt: null,
+  };
+
+  it('defaults to no sale window and zero stock for events without tiers', () => {
+    const serialized = serializeEventWithPrice(doc);
+    expect(serialized.saleEndsAt).toBeNull();
+    expect(serialized.totalQuota).toBe(0);
+    expect(serialized.totalSold).toBe(0);
+    expect(serialized.remaining).toBe(0);
+  });
+
+  it('exposes the earliest sale end and stock totals when urgency is given', () => {
+    const serialized = serializeEventWithPrice(
+      doc,
+      { minPrice: 150000, maxPrice: 500000 },
+      {
+        saleEndsAt: '2026-03-01T18:00:00.000Z',
+        totalQuota: 350,
+        totalSold: 12,
+        remaining: 338,
+      },
+    );
+    expect(serialized.saleEndsAt).toBe('2026-03-01T18:00:00.000Z');
+    expect(serialized.totalQuota).toBe(350);
+    expect(serialized.totalSold).toBe(12);
+    expect(serialized.remaining).toBe(338);
+    expect(serialized.minPrice).toBe(150000);
+  });
+});
