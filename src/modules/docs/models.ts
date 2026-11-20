@@ -73,6 +73,12 @@ export const refreshResultSchema = z
   })
   .strict();
 
+export const messageResultSchema = z
+  .object({
+    message: z.string(),
+  })
+  .strict();
+
 export const eventStatusSchema = z.enum(['DRAFT', 'SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'ENDED']);
 
 export const eventSchema = z
@@ -100,6 +106,8 @@ export const tierSchema = z
     saleStartsAt: dateTime,
     saleEndsAt: dateTime,
     maxPerUser: z.number().int(),
+    sold: z.number().int(),
+    remaining: z.number().int(),
   })
   .strict();
 

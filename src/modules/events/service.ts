@@ -104,7 +104,23 @@ const loadSoldCounts = async (
   return sold;
 };
 
-const serializeTier = (tier: TicketTierDoc): Record<string, unknown> => ({
+const loadTierSoldCounts = async (
+  collections: Collections,
+  tierIds: string[],
+): Promise<Map<string, number>> => {
+  const sold = new Map<string, number>();
+  if (tierIds.length === 0) return sold;
+  const rows = await collections.tickets
+    .aggregate<{ _id: string; sold: number }>([
+      { $match: { tierId: { $in: tierIds } } },
+      { $group: { _id: '$tierId', sold: { $sum: 1 } } },
+    ])
+    .toArray();
+  for (const row of rows) sold.set(row._id, row.sold);
+  return sold;
+};
+
+const serializeTier = (tier: TicketTierDoc, sold: number): Record<string, unknown> => ({
   id: tier._id,
   eventId: tier.eventId,
   name: tier.name,
@@ -113,6 +129,8 @@ const serializeTier = (tier: TicketTierDoc): Record<string, unknown> => ({
   saleStartsAt: tier.saleStartsAt.toISOString(),
   saleEndsAt: tier.saleEndsAt.toISOString(),
   maxPerUser: tier.maxPerUser,
+  sold,
+  remaining: Math.max(0, tier.quota - sold),
 });
 
 export class EventService {
@@ -266,7 +284,11 @@ export class EventService {
             .find({ eventId })
             .sort({ saleStartsAt: 1, _id: 1 })
             .toArray();
-          payload.tiers = tiers.map(serializeTier);
+          const soldCounts = await loadTierSoldCounts(
+            this.collections,
+            tiers.map((tier) => tier._id),
+          );
+          payload.tiers = tiers.map((tier) => serializeTier(tier, soldCounts.get(tier._id) ?? 0));
         }
         return payload;
       },
