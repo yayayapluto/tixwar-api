@@ -239,6 +239,7 @@ export const apiKeySchema = z
     active: z.boolean(),
     createdAt: dateTime,
     revokedAt: dateTime.nullable(),
+    expiresAt: dateTime.nullable(),
   })
   .strict();
 
@@ -249,6 +250,7 @@ export const apiKeyCreatedSchema = z
     prefix: z.string(),
     apiKey: z.string(),
     keyShownOnce: z.literal(true),
+    expiresAt: dateTime.nullable(),
   })
   .strict();
 
