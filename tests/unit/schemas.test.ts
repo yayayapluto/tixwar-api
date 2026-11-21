@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { eventListQueryGuard, eventListQuerySchema } from '../../src/modules/schemas.ts';
+import {
+  eventListQueryGuard,
+  eventListQuerySchema,
+  loginSchema,
+} from '../../src/modules/schemas.ts';
 
 const parse = (query: Record<string, unknown>) => {
   eventListQueryGuard.parse(query);
@@ -74,5 +78,21 @@ describe('event list query schema', () => {
       const message = String(error);
       expect(message).toContain('limit');
     }
+  });
+});
+
+describe('login schema', () => {
+  it('accepts a valid email identifier', () => {
+    expect(loginSchema.parse({ email: 'Admin@Tixwar.local', password: 'x' }).email).toBe(
+      'admin@tixwar.local',
+    );
+  });
+
+  it('accepts the literal admin alias', () => {
+    expect(loginSchema.parse({ email: ' Admin ', password: 'x' }).email).toBe('admin');
+  });
+
+  it('rejects a non-email identifier other than admin', () => {
+    expect(() => loginSchema.parse({ email: 'not-an-email', password: 'x' })).toThrow();
   });
 });

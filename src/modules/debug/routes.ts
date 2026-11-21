@@ -20,7 +20,6 @@ export const createDebugRouter = (deps: AppDeps, auth: RequestHandler): Router =
     auth,
     requireDebugAccess({
       debugEnabled: deps.env.DEBUG_ENABLED,
-      debugToken: deps.env.DEBUG_ADMIN_TOKEN,
     }),
   ];
 
