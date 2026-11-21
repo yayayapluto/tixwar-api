@@ -6,6 +6,7 @@ import type { UserRole } from '../../infra/db/types.ts';
 import { sha256Hex } from '../../shared/hash.ts';
 import { newUserId } from '../../shared/ids.ts';
 import { conflict, unauthorized } from '../../shared/problem.ts';
+import type { NotificationService } from '../notifications/service.ts';
 
 export interface AccessClaims {
   sub: string;
@@ -168,6 +169,69 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
 };
 
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
+export const requestPasswordReset = async (input: {
+  collections: Collections;
+  mailer: Pick<NotificationService, 'sendRaw'>;
+  email: string;
+  webUrl: string;
+  ttlSeconds: number;
+  requestId: string;
+}): Promise<{ emailSent: boolean }> => {
+  const email = normalizeEmail(input.email);
+  const user = await input.collections.users.findOne({ email, deletedAt: null });
+  if (!user) return { emailSent: false };
+
+  await input.collections.passwordResetTokens.updateMany(
+    { userId: user._id, usedAt: null },
+    { $set: { usedAt: new Date() } },
+  );
+
+  const token = randomBytes(32).toString('base64url');
+  const now = new Date();
+  await input.collections.passwordResetTokens.insertOne({
+    _id: randomUUID(),
+    userId: user._id,
+    tokenHash: sha256Hex(token),
+    expiresAt: new Date(now.getTime() + input.ttlSeconds * 1000),
+    createdAt: now,
+    usedAt: null,
+  });
+
+  const resetUrl = `${input.webUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
+  const minutes = Math.max(1, Math.round(input.ttlSeconds / 60));
+  await input.mailer.sendRaw({
+    userId: user._id,
+    subject: 'Reset your TixWar password',
+    body: `You requested a password reset for your TixWar account. Open this link to choose a new password (valid for ${minutes} minutes): ${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+    requestId: input.requestId,
+  });
+  return { emailSent: true };
+};
+
+export const resetPassword = async (input: {
+  collections: Collections;
+  token: string;
+  password: string;
+}): Promise<{ userId: string }> => {
+  const stored = await input.collections.passwordResetTokens.findOne({
+    tokenHash: sha256Hex(input.token),
+  });
+  if (!stored || stored.usedAt !== null || stored.expiresAt.getTime() <= Date.now()) {
+    throw unauthorized('Invalid or expired reset token');
+  }
+  const user = await input.collections.users.findOne({ _id: stored.userId, deletedAt: null });
+  if (!user) throw unauthorized('Invalid or expired reset token');
+  await input.collections.users.updateOne(
+    { _id: user._id },
+    { $set: { passwordHash: await hashPassword(input.password), updatedAt: new Date() } },
+  );
+  await input.collections.passwordResetTokens.updateOne(
+    { _id: stored._id },
+    { $set: { usedAt: new Date() } },
+  );
+  return { userId: user._id };
+};
 
 export const createUser = async (input: {
   collections: Collections;
