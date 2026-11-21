@@ -98,13 +98,30 @@ export interface EventPriceRange {
   maxPrice: number | null;
 }
 
+export interface EventTierSummary extends EventPriceRange {
+  saleEndsAt: Date | null;
+  totalQuota: number;
+}
+
+export interface EventUrgency {
+  saleEndsAt: string | null;
+  totalQuota: number;
+  totalSold: number;
+  remaining: number;
+}
+
 export const serializeEventWithPrice = (
   doc: EventDoc,
   price?: EventPriceRange,
+  urgency?: EventUrgency,
 ): Record<string, unknown> => ({
   ...serializeEvent(doc),
   minPrice: price?.minPrice ?? null,
   maxPrice: price?.maxPrice ?? null,
+  saleEndsAt: urgency?.saleEndsAt ?? null,
+  totalQuota: urgency?.totalQuota ?? 0,
+  totalSold: urgency?.totalSold ?? 0,
+  remaining: urgency?.remaining ?? 0,
 });
 
 export const pickFields = (

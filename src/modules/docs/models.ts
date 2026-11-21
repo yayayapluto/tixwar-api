@@ -111,6 +111,10 @@ export const eventListItemSchema = eventSchema
   .extend({
     minPrice: z.number().int().nullable(),
     maxPrice: z.number().int().nullable(),
+    saleEndsAt: dateTime.nullable(),
+    totalQuota: z.number().int(),
+    totalSold: z.number().int(),
+    remaining: z.number().int(),
   })
   .strict();
 
