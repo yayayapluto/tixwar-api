@@ -93,18 +93,16 @@ export const requireOwner = (req: Request, ownerId: string): void => {
   if (req.principal.id !== ownerId) throw forbidden('You do not own this resource');
 };
 
-export const requireDebugAccess = (deps: {
-  debugEnabled: boolean;
-  debugToken?: string;
-}): RequestHandler => {
+// Debug endpoints are gated by the admin JWT (checked by the `auth`
+// middleware that runs before this guard) and DEBUG_ENABLED. A static
+// x-debug-token used to be enforced here as well, but the admin web UI has
+// no way to present one and the runbook/demo document Bearer-only access,
+// so every debug call from the browser failed with 401. The token is no
+// longer checked; the admin JWT remains the gate.
+export const requireDebugAccess = (deps: { debugEnabled: boolean }): RequestHandler => {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!deps.debugEnabled) {
       next(forbidden('Debug endpoints are disabled'));
-      return;
-    }
-    const provided = req.header('x-debug-token');
-    if (deps.debugToken && provided !== deps.debugToken) {
-      next(unauthorized('Debug token is invalid'));
       return;
     }
     if (!req.principal) {
