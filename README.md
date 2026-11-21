@@ -28,6 +28,10 @@ Alur inti satu pembelian:
 
 Redis adalah _atomic stock gate_; MongoDB adalah catatan durable. Detil lengkap: `docs/architecture.md`. Keputusan yang menyimpang dari PRD: `docs/adr/`.
 
+![TixWar API Architecture](assets/tixwar-api-architecture.png)
+
+Architecture diagram source (Mermaid): [`docs/tixwar-api-architecture.mmd`](docs/tixwar-api-architecture.mmd).
+
 ---
 
 ## Prasyarat
