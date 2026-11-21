@@ -1,6 +1,22 @@
 import type { Document, Filter } from 'mongodb';
+import { z } from 'zod';
 import type { EventDoc } from '../../infra/db/types.ts';
 import { badRequest } from '../../shared/problem.ts';
+
+export const EVENT_SORT_MODES = ['ending', 'date', 'price-asc', 'price-desc'] as const;
+export type EventSortMode = (typeof EVENT_SORT_MODES)[number];
+export const DEFAULT_EVENT_SORT_MODE: EventSortMode = 'ending';
+
+export const eventSortModeSchema = z.enum(EVENT_SORT_MODES);
+
+export const parseEventSortMode = (value: unknown): EventSortMode => {
+  if (value === undefined) return DEFAULT_EVENT_SORT_MODE;
+  const parsed = eventSortModeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw badRequest(`sort must be one of ${EVENT_SORT_MODES.join(', ')}`);
+  }
+  return parsed.data;
+};
 
 export interface EventListQuery {
   q?: string;
@@ -11,7 +27,7 @@ export interface EventListQuery {
   date_to?: Date;
   price_min?: number;
   price_max?: number;
-  sort?: Array<{ field: string; direction: 1 | -1 }>;
+  sort?: EventSortMode;
   fields?: string[];
   include?: string[];
   page?: number;
@@ -57,20 +73,87 @@ export const buildEventFilter = (
   return filter as Filter<EventDoc>;
 };
 
-export const buildEventSort = (
-  sort: Array<{ field: string; direction: 1 | -1 }> | undefined,
-): Record<string, 1 | -1> => {
-  const result: Record<string, 1 | -1> = {};
-  if (!sort || sort.length === 0) {
-    result.startsAt = 1;
-    result._id = 1;
-    return result;
+export const buildEventSort = (sort: EventSortMode): Record<string, 1 | -1> | null => {
+  if (sort === 'date') return { startsAt: 1, _id: 1 };
+  return null;
+};
+
+export interface EventSortKeys {
+  id: string;
+  startsAt: Date;
+  saleEndsAt: Date | null;
+  minPrice: number | null;
+}
+
+const compareStrings = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
+export const compareEventSortKeys = (
+  mode: EventSortMode,
+  left: EventSortKeys,
+  right: EventSortKeys,
+): number => {
+  switch (mode) {
+    case 'date':
+      return (
+        left.startsAt.getTime() - right.startsAt.getTime() || compareStrings(left.id, right.id)
+      );
+    case 'price-asc':
+      return (
+        (left.minPrice ?? Number.POSITIVE_INFINITY) -
+          (right.minPrice ?? Number.POSITIVE_INFINITY) || compareStrings(left.id, right.id)
+      );
+    case 'price-desc':
+      return (
+        (right.minPrice ?? Number.NEGATIVE_INFINITY) -
+          (left.minPrice ?? Number.NEGATIVE_INFINITY) || compareStrings(left.id, right.id)
+      );
+    default:
+      return (
+        (left.saleEndsAt?.getTime() ?? Number.POSITIVE_INFINITY) -
+          (right.saleEndsAt?.getTime() ?? Number.POSITIVE_INFINITY) ||
+        left.startsAt.getTime() - right.startsAt.getTime() ||
+        compareStrings(left.id, right.id)
+      );
   }
-  for (const entry of sort) {
-    result[entry.field] = entry.direction;
+};
+
+export const eventSortCursorScope = (mode: EventSortMode): string => `sort:${mode}`;
+
+export const eventSortKeysToCursor = (keys: EventSortKeys): Record<string, unknown> => ({
+  saleEndsAt: keys.saleEndsAt?.toISOString() ?? null,
+  startsAt: keys.startsAt.toISOString(),
+  minPrice: keys.minPrice,
+  _id: keys.id,
+});
+
+const parseCursorDate = (value: unknown): Date | null | undefined => {
+  if (value === null) return null;
+  if (typeof value === 'string') return new Date(value);
+  return undefined;
+};
+
+export const eventSortKeysFromCursor = (sort: unknown): EventSortKeys => {
+  if (typeof sort !== 'object' || sort === null) {
+    throw badRequest('cursor does not match the requested sort');
   }
-  result._id = 1;
-  return result;
+  const record = sort as Record<string, unknown>;
+  const startsAt = parseCursorDate(record.startsAt);
+  const saleEndsAt = parseCursorDate(record.saleEndsAt);
+  const minPrice = record.minPrice;
+  if (
+    startsAt === undefined ||
+    startsAt === null ||
+    Number.isNaN(startsAt.getTime()) ||
+    saleEndsAt === undefined ||
+    (saleEndsAt !== null && Number.isNaN(saleEndsAt.getTime())) ||
+    (minPrice !== null && (typeof minPrice !== 'number' || !Number.isFinite(minPrice))) ||
+    typeof record._id !== 'string' ||
+    record._id.length === 0
+  ) {
+    throw badRequest('cursor does not match the requested sort');
+  }
+  return { id: record._id, startsAt, saleEndsAt, minPrice };
 };
 
 export const buildProjection = (fields?: string[]): Document | undefined => {
