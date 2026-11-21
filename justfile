@@ -9,6 +9,21 @@ up:
 up-ha:
     docker compose --profile ha up -d --build
 
+podman-up:
+    podman compose -f podman-compose.yml up -d --build
+
+podman-up-ha:
+    podman compose -f podman-compose.yml --profile ha up -d --build
+
+podman-down:
+    podman compose -f podman-compose.yml down
+
+podman-logs:
+    podman compose -f podman-compose.yml logs -f api-1 api-2 api-3 worker outbox-publisher
+
+podman-ps:
+    podman compose -f podman-compose.yml ps
+
 down:
     docker compose down
 
