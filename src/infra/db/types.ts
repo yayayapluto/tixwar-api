@@ -33,6 +33,7 @@ export interface ApiKeyDoc extends Document {
   active: boolean;
   createdAt: Date;
   revokedAt: Date | null;
+  expiresAt?: Date | null;
 }
 
 export interface PasswordResetTokenDoc extends Document {

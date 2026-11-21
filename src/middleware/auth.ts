@@ -36,6 +36,9 @@ export const createAuthMiddleware = (deps: AuthDeps): RequestHandler => {
           active: true,
         });
         if (!record) throw unauthorized('API key is invalid or revoked');
+        if (record.expiresAt && record.expiresAt.getTime() <= Date.now()) {
+          throw unauthorized('API key has expired');
+        }
         const owner = await deps.collections.users.findOne({ _id: record.ownerId });
         if (!owner) throw unauthorized('API key owner no longer exists');
         req.principal = { id: owner._id, role: owner.role, via: 'api-key' };

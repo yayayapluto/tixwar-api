@@ -111,6 +111,12 @@ export const createWebhookSchema = z
 export const createApiKeySchema = z
   .object({
     name: z.string().trim().min(1).max(100),
+    expiresAt: z.iso
+      .datetime()
+      .refine((value) => new Date(value).getTime() > Date.now(), {
+        message: 'expiresAt must be a date in the future',
+      })
+      .optional(),
   })
   .strict();
 
