@@ -34,6 +34,22 @@ Architecture diagram source (Mermaid): [`docs/tixwar-api-architecture.mmd`](docs
 
 ---
 
+## Spesifikasi Minimum
+
+Angka di bawah ini adalah **perkiraan** untuk development lokal, bukan hasil ukur: `docker-compose.yml` tidak memasang batas CPU/RAM per service, dan full compose **belum pernah dijalankan sampai selesai di VM ini** (kendala sandbox: seccomp memblokir `setns(2)`, tidak ada `CAP_NET_ADMIN`), jadi angka Docker/Podman dihitung dari isi compose, bukan dari pengukuran.
+
+| Cara jalan            | CPU    | RAM  | Disk  |
+| --------------------- | ------ | ---- | ----- |
+| Docker (full compose) | 4 vCPU | 8 GB | 20 GB |
+| Podman                | 4 vCPU | 8 GB | 20 GB |
+| Native                | 2 vCPU | 4 GB | 10 GB |
+
+- **Docker** — butuh Docker Engine + Compose v2. `docker-compose.yml` berisi 28 service (25 default + 3 secondary shard di profil `ha`): MongoDB 7 sharded (3 configsvr, 3 shard, `mongos`), Redis 7, API x3, worker, outbox-publisher, mock-gateway, nginx, MinIO (s3mock), Mailpit, Prometheus, Grafana, Loki, Promtail, Jaeger, mongodb-exporter, Alertmanager.
+- **Podman** — Podman `>= 4.4` + `podman compose`. `podman-compose.yml` (27 service) adalah cerminan compose Docker; Promtail dihilangkan karena butuh socket Docker. Yang teruji jalan di VM ini: rootful dengan `--network host` dan `--storage-driver vfs`; rootless gagal, `podman exec` tidak bisa, dan tidak ada bridge network. `docs/podman.md` sendiri menandai setup rootless-nya eksperimental dan belum terverifikasi.
+- **Native** — Bun `>= 1.3`, MongoDB 7, Redis 7. Single-node replica set `rs0` sudah cukup; cluster sharded tidak wajib. Port utama: API 8080, MongoDB 27017, Redis 6379 (mock-gateway 4000, Mailpit 1025/8025 bila dipakai).
+
+---
+
 ## Prasyarat
 
 - [Bun](https://bun.sh) `>= 1.3` (runtime, test runner, package manager).
