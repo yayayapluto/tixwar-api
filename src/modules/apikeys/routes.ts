@@ -18,6 +18,7 @@ export const createApiKeysRouter = (deps: AppDeps, auth: RequestHandler): Router
         collections: deps.collections,
         ownerId: req.principal!.id,
         name: body.name,
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       });
       await audit(deps.collections, {
         userId: req.principal!.id,

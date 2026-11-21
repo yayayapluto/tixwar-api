@@ -261,9 +261,11 @@ export const createApiKey = async (input: {
   collections: Collections;
   ownerId: string;
   name: string;
-}): Promise<{ id: string; apiKey: string; prefix: string }> => {
+  expiresAt?: Date | null;
+}): Promise<{ id: string; apiKey: string; prefix: string; expiresAt: Date | null }> => {
   const raw = `twk_${randomBytes(24).toString('base64url')}`;
   const prefix = raw.slice(0, 12);
+  const expiresAt = input.expiresAt ?? null;
   const doc = {
     _id: randomUUID(),
     ownerId: input.ownerId,
@@ -273,7 +275,8 @@ export const createApiKey = async (input: {
     active: true,
     createdAt: new Date(),
     revokedAt: null,
+    expiresAt,
   };
   await input.collections.apiKeys.insertOne(doc);
-  return { id: doc._id, apiKey: raw, prefix };
+  return { id: doc._id, apiKey: raw, prefix, expiresAt };
 };

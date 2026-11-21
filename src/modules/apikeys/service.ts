@@ -9,6 +9,7 @@ export interface ApiKeyView {
   active: boolean;
   createdAt: string;
   revokedAt: string | null;
+  expiresAt: string | null;
 }
 
 export const serializeApiKey = (doc: ApiKeyDoc): ApiKeyView => ({
@@ -18,6 +19,7 @@ export const serializeApiKey = (doc: ApiKeyDoc): ApiKeyView => ({
   active: doc.active,
   createdAt: doc.createdAt.toISOString(),
   revokedAt: doc.revokedAt ? doc.revokedAt.toISOString() : null,
+  expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
 });
 
 export const listApiKeys = async (
