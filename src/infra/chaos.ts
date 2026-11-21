@@ -46,6 +46,22 @@ export const recoverChaos = (target: ChaosTarget): void => {
 
 export const chaosActive = (target: ChaosTarget): boolean => active.has(target);
 
+export interface ActiveChaosRule {
+  latencyMs: number;
+  errorRatePercent: number;
+  remainingMs: number;
+}
+
+export const readChaosRule = (target: ChaosTarget): ActiveChaosRule | undefined => {
+  const entry = currentRule(target);
+  if (!entry) return undefined;
+  return {
+    latencyMs: entry.latencyMs,
+    errorRatePercent: entry.errorRatePercent,
+    remainingMs: Math.max(0, entry.until - Date.now()),
+  };
+};
+
 const currentRule = (target: ChaosTarget): ChaosRule | undefined => {
   const entry = active.get(target);
   if (!entry) return undefined;

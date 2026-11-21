@@ -1,5 +1,6 @@
 import type { AppDeps } from '../../app.ts';
-import { injectChaos, recoverChaos } from '../../infra/chaos.ts';
+import type { ChaosTarget } from '../../infra/chaos.ts';
+import { injectChaos, readChaosRule, recoverChaos } from '../../infra/chaos.ts';
 import { createLogger } from '../../shared/logger.ts';
 import { badRequest } from '../../shared/problem.ts';
 import type { DebugChaosInput } from '../schemas.ts';
@@ -7,6 +8,88 @@ import type { DebugChaosInput } from '../schemas.ts';
 const logger = createLogger('debug-chaos');
 
 const CHAOS_DURATION_MS = 30_000;
+const WORKER_FAILURE_RATE_KEY = 'chaos:worker:failure-rate';
+
+export type ChaosStateTarget = 'redis' | 'mongo' | 'worker' | 'gateway';
+
+export interface ChaosTargetState {
+  target: ChaosStateTarget;
+  active: boolean;
+  action: string | null;
+  detail: Record<string, unknown>;
+}
+
+export interface ChaosStateOverview {
+  targets: ChaosTargetState[];
+}
+
+const localTargetState = (target: ChaosTarget): ChaosTargetState => {
+  const rule = readChaosRule(target);
+  if (!rule) return { target, active: false, action: null, detail: {} };
+  const action = rule.errorRatePercent > 0 ? 'fail' : 'latency';
+  return {
+    target,
+    active: true,
+    action,
+    detail: {
+      latencyMs: rule.latencyMs,
+      errorRatePercent: rule.errorRatePercent,
+      remainingMs: rule.remainingMs,
+    },
+  };
+};
+
+const workerTargetState = async (deps: AppDeps): Promise<ChaosTargetState> => {
+  const raw = await deps.redis.get(WORKER_FAILURE_RATE_KEY);
+  const failureRatePercent = raw === null ? 0 : Number(raw);
+  if (!Number.isFinite(failureRatePercent) || failureRatePercent <= 0) {
+    return { target: 'worker', active: false, action: null, detail: { failureRatePercent: 0 } };
+  }
+  const ttlSeconds = await deps.redis.ttl(WORKER_FAILURE_RATE_KEY);
+  return {
+    target: 'worker',
+    active: true,
+    action: 'fail',
+    detail: { failureRatePercent, ttlSeconds },
+  };
+};
+
+const gatewayTargetState = async (deps: AppDeps): Promise<ChaosTargetState> => {
+  try {
+    const response = await fetch(`${deps.env.GATEWAY_URL}/state`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) {
+      return { target: 'gateway', active: false, action: null, detail: { reachable: false } };
+    }
+    const state = (await response.json()) as {
+      failMode?: unknown;
+      latencyMs?: unknown;
+      chargeCount?: unknown;
+    };
+    const failMode = state.failMode === true;
+    const latencyMs = typeof state.latencyMs === 'number' ? state.latencyMs : 0;
+    const active = failMode || latencyMs > 0;
+    return {
+      target: 'gateway',
+      active,
+      action: failMode ? 'fail' : latencyMs > 0 ? 'latency' : null,
+      detail: { reachable: true, failMode, latencyMs, chargeCount: state.chargeCount ?? null },
+    };
+  } catch {
+    return { target: 'gateway', active: false, action: null, detail: { reachable: false } };
+  }
+};
+
+export const getChaosState = async (deps: AppDeps): Promise<ChaosStateOverview> => {
+  const targets: ChaosTargetState[] = [
+    localTargetState('redis'),
+    localTargetState('mongo'),
+    await workerTargetState(deps),
+    await gatewayTargetState(deps),
+  ];
+  return { targets };
+};
 
 export interface ChaosState {
   target: DebugChaosInput['target'];
@@ -83,7 +166,7 @@ export const applyChaos = async (
 
   if (input.target === 'worker') {
     const value = input.action === 'recover' ? 0 : (input.value ?? 100);
-    await deps.redis.set('chaos:worker:failure-rate', String(value), 'EX', 3600);
+    await deps.redis.set(WORKER_FAILURE_RATE_KEY, String(value), 'EX', 3600);
     return {
       target: 'worker',
       action: input.action,
