@@ -41,9 +41,11 @@ describe('event query safety', () => {
     expect(serialized).not.toContain('$where');
   });
 
-  it('always appends _id as the sort tie-breaker', () => {
-    expect(buildEventSort(undefined)).toEqual({ startsAt: 1, _id: 1 });
-    expect(buildEventSort([{ field: 'name', direction: -1 }])).toEqual({ name: -1, _id: 1 });
+  it('maps date to a mongo sort and enrichment sorts to no mongo sort', () => {
+    expect(buildEventSort('date')).toEqual({ startsAt: 1, _id: 1 });
+    expect(buildEventSort('ending')).toBeNull();
+    expect(buildEventSort('price-asc')).toBeNull();
+    expect(buildEventSort('price-desc')).toBeNull();
   });
 
   it('projects only allowlisted fields', () => {

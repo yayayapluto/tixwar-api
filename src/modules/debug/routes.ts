@@ -11,7 +11,7 @@ import {
   debugChaosSchema,
   debugLoadSchema,
 } from '../schemas.ts';
-import { applyChaos } from './chaos.ts';
+import { applyChaos, getChaosState } from './chaos.ts';
 import { runLoadScenario } from './load.ts';
 
 export const createDebugRouter = (deps: AppDeps, auth: RequestHandler): Router => {
@@ -44,6 +44,15 @@ export const createDebugRouter = (deps: AppDeps, auth: RequestHandler): Router =
       const body = validated<DebugLoadInput>(req, 'body');
       const summary = await runLoadScenario(deps, body, req.requestId);
       res.json(buildEnvelope({ data: summary, self: '/debug/load', limit: 1 }));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/chaos', ...guard, async (_req, res, next) => {
+    try {
+      const state = await getChaosState(deps);
+      res.json(buildEnvelope({ data: state, self: '/debug/chaos', limit: 1 }));
     } catch (error) {
       next(error);
     }

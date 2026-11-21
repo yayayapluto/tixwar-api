@@ -240,6 +240,7 @@ export const apiKeySchema = z
     createdAt: dateTime,
     revokedAt: dateTime.nullable(),
     expiresAt: dateTime.nullable(),
+    lastUsedAt: dateTime.nullable(),
   })
   .strict();
 
@@ -251,6 +252,7 @@ export const apiKeyCreatedSchema = z
     apiKey: z.string(),
     keyShownOnce: z.literal(true),
     expiresAt: dateTime.nullable(),
+    lastUsedAt: dateTime.nullable(),
   })
   .strict();
 
@@ -277,5 +279,20 @@ export const chaosStateSchema = z
     action: z.enum(['fail', 'latency', 'recover', 'failure-rate', 'slow']),
     applied: z.boolean(),
     detail: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+export const chaosTargetStateSchema = z
+  .object({
+    target: z.enum(['redis', 'mongo', 'worker', 'gateway']),
+    active: z.boolean(),
+    action: z.enum(['fail', 'latency']).nullable(),
+    detail: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+export const chaosStateOverviewSchema = z
+  .object({
+    targets: z.array(chaosTargetStateSchema),
   })
   .strict();

@@ -15,12 +15,12 @@ import {
   bulkTiersSchema,
   type CreateEventInput,
   createEventSchema,
-  type EventListQueryInput,
   eventListQueryGuard,
   eventListQuerySchema,
   type PatchEventInput,
   patchEventSchema,
 } from '../schemas.ts';
+import { parseEventSortMode } from './query.ts';
 import type { EventService } from './service.ts';
 
 export const createEventsRouter = (deps: AppDeps, service: EventService): Router => {
@@ -31,14 +31,17 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
     '/',
     deps.rateLimiters.middleware('anon-browse', clientIp),
     validate({ query: eventListQueryGuard }),
-    validate({ query: eventListQuerySchema }),
     async (req, res, next) => {
       try {
-        const query = validated<EventListQueryInput>(req, 'query');
+        const rawQuery = { ...(req.query as Record<string, unknown>) };
+        const sortMode = parseEventSortMode(rawQuery.sort);
+        delete rawQuery.sort;
+        const query = eventListQuerySchema.parse(rawQuery);
+        const queryParams = { ...(req.query as Record<string, string>), sort: sortMode };
         const selfPath = `/v1/events?${new URLSearchParams(
-          Object.entries(req.query as Record<string, string>).filter(([key]) => key !== 'cursor'),
+          Object.entries(queryParams).filter(([key]) => key !== 'cursor'),
         ).toString()}`;
-        const result = await service.list(query, selfPath);
+        const result = await service.list({ ...query, sort: sortMode }, selfPath);
         res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
         res.setHeader('X-Cache', result.cacheHit ? 'HIT' : 'MISS');
         const nextCursor = result.nextCursor;
@@ -52,7 +55,7 @@ export const createEventsRouter = (deps: AppDeps, service: EventService): Router
             nextCursor,
             hasMore: result.hasMore,
             next: nextCursor
-              ? `/v1/events?${new URLSearchParams({ ...(req.query as Record<string, string>), cursor: nextCursor, page: '' }).toString()}`
+              ? `/v1/events?${new URLSearchParams({ ...queryParams, cursor: nextCursor, page: '' }).toString()}`
               : null,
           }),
         );

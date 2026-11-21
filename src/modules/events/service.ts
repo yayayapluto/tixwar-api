@@ -1,3 +1,4 @@
+import type { Document, Filter } from 'mongodb';
 import type { Env } from '../../config/env.ts';
 import type { Collections } from '../../infra/db/collections.ts';
 import type { EventDoc, TicketTierDoc } from '../../infra/db/types.ts';
@@ -11,8 +12,15 @@ import {
   buildEventFilter,
   buildEventSort,
   buildProjection,
+  compareEventSortKeys,
+  DEFAULT_EVENT_SORT_MODE,
   type EventListQuery,
+  type EventSortKeys,
+  type EventSortMode,
   type EventTierSummary,
+  eventSortCursorScope,
+  eventSortKeysFromCursor,
+  eventSortKeysToCursor,
   normalizeCacheQuery,
   pickFields,
   serializeEvent,
@@ -188,12 +196,20 @@ export class EventService {
   ): Promise<Omit<EventListResult, 'cacheHit'> | null> {
     const tierEventIds = await resolveTierIdsByPrice(this.collections, query);
     const filter = buildEventFilter(query, tierEventIds);
-    const sort = buildEventSort(query.sort);
+    const sortMode = query.sort ?? DEFAULT_EVENT_SORT_MODE;
+    const sort = buildEventSort(sortMode);
     const projection = buildProjection(query.fields);
     const readPreference = 'secondaryPreferred' as const;
 
+    if (sort === null) {
+      return this.loadEnrichmentSortedList(query, sortMode, filter, projection, readPreference);
+    }
+
     if (query.cursor) {
       const cursor = decodeCursor(query.cursor);
+      if (cursor.scope !== undefined) {
+        throw badRequest('cursor does not match the requested sort');
+      }
       const sortEntries = Object.entries(sort);
       const conditions: Array<Record<string, unknown>> = [];
       for (let index = 0; index < sortEntries.length; index += 1) {
@@ -258,6 +274,86 @@ export class EventService {
       total: total >= 0 ? total : undefined,
       nextCursor: null,
       hasMore: total >= 0 ? skip + docs.length < total : docs.length === query.limit,
+    };
+  }
+
+  private async loadEnrichmentSortedList(
+    query: EventListQuery,
+    sortMode: EventSortMode,
+    filter: Filter<EventDoc>,
+    projection: Document | undefined,
+    readPreference: 'secondaryPreferred',
+  ): Promise<Omit<EventListResult, 'cacheHit'>> {
+    const matches = await this.collections.events
+      .find(filter, { readPreference, projection: { _id: 1, startsAt: 1 } })
+      .toArray();
+    const summaries = await loadTierSummaries(
+      this.collections,
+      matches.map((doc) => doc._id),
+    );
+    const entries: EventSortKeys[] = matches.map((doc) => {
+      const summary = summaries.get(doc._id);
+      return {
+        id: doc._id,
+        startsAt: doc.startsAt,
+        saleEndsAt: summary?.saleEndsAt ?? null,
+        minPrice: summary?.minPrice ?? null,
+      };
+    });
+    entries.sort((left, right) => compareEventSortKeys(sortMode, left, right));
+
+    let pageEntries: EventSortKeys[];
+    let hasMore: boolean;
+    let page: number | undefined;
+    let total: number | undefined;
+    if (query.cursor) {
+      const cursor = decodeCursor(query.cursor);
+      if (cursor.scope !== eventSortCursorScope(sortMode)) {
+        throw badRequest('cursor does not match the requested sort');
+      }
+      const cursorKeys = eventSortKeysFromCursor(cursor.sort);
+      const after = entries.filter(
+        (entry) => compareEventSortKeys(sortMode, entry, cursorKeys) > 0,
+      );
+      pageEntries = after.slice(0, query.limit);
+      hasMore = after.length > query.limit;
+    } else {
+      page = query.page ?? 1;
+      const start = (page - 1) * query.limit;
+      pageEntries = entries.slice(start, start + query.limit);
+      hasMore = start + pageEntries.length < entries.length;
+      total = entries.length;
+    }
+
+    const docs =
+      pageEntries.length === 0
+        ? []
+        : await this.collections.events
+            .find(
+              { _id: { $in: pageEntries.map((entry) => entry.id) }, deletedAt: null },
+              { readPreference, ...(projection ? { projection } : {}) },
+            )
+            .toArray();
+    const byId = new Map(docs.map((doc) => [doc._id, doc]));
+    const ordered = pageEntries
+      .map((entry) => byId.get(entry.id))
+      .filter((doc): doc is EventDoc => doc !== undefined);
+    const last = pageEntries.at(-1);
+    const nextCursor =
+      hasMore && last
+        ? encodeCursor({
+            sort: eventSortKeysToCursor(last),
+            id: last.id,
+            scope: eventSortCursorScope(sortMode),
+          })
+        : null;
+    return {
+      data: await this.serializeListPage(ordered, query.fields),
+      page,
+      limit: query.limit,
+      total,
+      nextCursor,
+      hasMore,
     };
   }
 

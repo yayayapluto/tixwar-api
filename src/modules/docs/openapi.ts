@@ -22,6 +22,7 @@ import {
   apiKeySchema,
   authSessionSchema,
   bulkTiersResultSchema,
+  chaosStateOverviewSchema,
   chaosStateSchema,
   eventCreateResultSchema,
   eventDetailSchema,
@@ -205,6 +206,7 @@ const responseComponents = {
   WebhookEndpoint: toJson(webhookEndpointSchema),
   WebhookCreated: toJson(webhookCreatedSchema),
   ChaosState: toJson(chaosStateSchema),
+  ChaosStateOverview: toJson(chaosStateOverviewSchema),
 };
 
 export const buildOpenApiDocument = (): Record<string, unknown> => ({
@@ -352,8 +354,13 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
           {
             name: 'sort',
             in: 'query',
-            schema: { type: 'string' },
-            description: 'Allowlist: startsAt, name, createdAt, updatedAt; prefix with - for desc',
+            schema: {
+              type: 'string',
+              enum: ['ending', 'date', 'price-asc', 'price-desc'],
+              default: 'ending',
+            },
+            description:
+              'ending: saleEndsAt ascending, nulls last, tiebreak startsAt; date: startsAt ascending; price-asc: minPrice ascending, nulls last; price-desc: minPrice descending, nulls last',
           },
           {
             name: 'fields',
@@ -650,6 +657,15 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
       },
     },
     '/debug/chaos': {
+      get: {
+        tags: ['debug'],
+        summary: 'Read current chaos state per target (admin + DEBUG_ENABLED)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: jsonResponse('Chaos state overview', envelopeOf(ref('ChaosStateOverview'))),
+          ...problemResponses([401, 403]),
+        },
+      },
       post: {
         tags: ['debug'],
         summary: 'Inject dependency failure or latency (auto-recovers)',
