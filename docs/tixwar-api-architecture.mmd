@@ -1,0 +1,110 @@
+%%{init: {"flowchart": {"htmlLabels": true, "curve": "basis"}}}%%
+flowchart LR
+    classDef client fill:#e0f2fe,stroke:#0284c7,stroke-width:2px
+    classDef edge fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    classDef api fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    classDef worker fill:#ede9fe,stroke:#7c3aed,stroke-width:2px
+    classDef data fill:#fee2e2,stroke:#dc2626,stroke-width:2px
+    classDef obs fill:#f1f5f9,stroke:#64748b,stroke-width:2px
+    classDef note fill:#fffbeb,stroke:#d97706,stroke-width:1px,stroke-dasharray: 5 5
+
+    subgraph Client["CLIENT"]
+        direction TB
+        Web["tixwar-web<br/>Vite + React"]
+        Ext["External client<br/>X-API-Key header"]
+        Swagger["Swagger UI<br/>/docs · /openapi.json"]
+    end
+
+    subgraph Edge["EDGE"]
+        direction TB
+        Nginx["nginx<br/>reverse proxy"]
+    end
+
+    subgraph API["API: Bun + TypeScript + Express 5"]
+        direction TB
+        Replicas["api-1 · api-2 · api-3<br/>3 API process replicas"]
+        AuthMod["auth · apikeys<br/>login, refresh, reset password<br/>JWT 15 min · refresh 7 days"]
+        EventsMod["events · eventstats<br/>CRUD event · statistics<br/>SSE /v1/events/{id}/stream"]
+        OrdersMod["orders · payments<br/>POST /v1/orders · /:id/pay · /:id/cancel"]
+        TicketsMod["tickets · stock<br/>Ticket QR · Redis stock gate"]
+        PlatformMod["webhooks · notifications · audit<br/>debug · docs · health<br/>/health · /ready · /metrics"]
+    end
+
+    subgraph Async["ASYNC: Workers & Queues"]
+        direction TB
+        Outbox["outbox-publisher<br/>outbox polling on Mongo"]
+        Worker["worker.ts<br/>BullMQ workers"]
+        Queues["BullMQ · prefix tixwar-<br/>order · payment · notification<br/>webhook · expiry · dlq"]
+    end
+
+    subgraph Data["DATA & EXTERNAL SERVICES"]
+        direction TB
+        Mongo["MongoDB 7 sharded<br/>mongos · 3 config server<br/>shard-0 · shard-1 · shard-2<br/>+ HA"]
+        Redis["Redis 7<br/>stock gate · cache · pub/sub"]
+        Minio["MinIO / S3<br/>Ticket QR · presigned URL"]
+        Gateway["mock-gateway<br/>fake payment gateway<br/>circuit breaker"]
+        Mailpit["Mailpit<br/>SMTP email"]
+        WebhookTarget["Webhook target<br/>Customer URL"]
+    end
+
+    subgraph Observability["OBSERVABILITY"]
+        direction TB
+        Prom["Prometheus<br/>scrape /metrics"]
+        Grafana["Grafana<br/>dashboard"]
+        Loki["Loki + Promtail<br/>log aggregation<br/>API & worker logs"]
+        Jaeger["Jaeger<br/>OTEL tracing"]
+        MongoExp["mongodb-exporter<br/>Mongo metrics"]
+        AM["Alertmanager"]
+    end
+
+    FlowNote["MAIN FLOW<br/>Buat order, kunci stok di Redis, lalu bayar lewat worker dan mock-gateway.<br/>Tiket terbit, QR naik ke S3, lalu email dan webhook jalan."]
+
+    Web -->|"HTTPS"| Nginx
+    Ext -->|"X-API-Key"| Nginx
+    Swagger -->|"open /docs"| Nginx
+    Nginx -->|"proxy"| Replicas
+    Replicas --- AuthMod
+    Replicas --- EventsMod
+    Replicas --- OrdersMod
+    Replicas --- TicketsMod
+    Replicas --- PlatformMod
+
+    AuthMod -->|"users · refresh token · api key"| Mongo
+    EventsMod -->|"events · tiers · statistics"| Mongo
+    Redis -->|"stock pub/sub, then SSE"| EventsMod
+    OrdersMod -->|"orders · payments · outbox"| Mongo
+    OrdersMod -->|"check & lock stock"| Redis
+    Redis -->|"order status pub/sub, then SSE"| OrdersMod
+    TicketsMod -->|"tickets"| Mongo
+    TicketsMod -->|"presigned URL for QR"| Minio
+    PlatformMod -->|"audit log · webhook config"| Mongo
+
+    Outbox -->|"outbox polling"| Mongo
+    Outbox -->|"publish events"| Queues
+    Worker -->|"consume"| Queues
+    Worker -->|"write tickets · orders · payments"| Mongo
+    Worker -->|"charge, idempotency key"| Gateway
+    Worker -->|"upload ticket QR"| Minio
+    Worker -->|"send confirmation email"| Mailpit
+    Worker -->|"POST webhook"| WebhookTarget
+    Worker -->|"order status pub/sub"| Redis
+
+    Prom -->|"scrape /metrics"| Replicas
+    Prom -->|"scrape"| Worker
+    Prom -->|"scrape"| MongoExp
+    MongoExp -->|"read metrics"| Mongo
+    Prom -->|"alert"| AM
+    Grafana -->|"query"| Prom
+    Grafana -->|"query logs"| Loki
+    Replicas -->|"OTEL spans"| Jaeger
+    Worker -->|"OTEL spans"| Jaeger
+
+    FlowNote -.-> OrdersMod
+
+    class Web,Ext,Swagger client
+    class Nginx edge
+    class Replicas,AuthMod,EventsMod,OrdersMod,TicketsMod,PlatformMod api
+    class Outbox,Worker,Queues worker
+    class Mongo,Redis,Minio,Gateway,Mailpit,WebhookTarget data
+    class Prom,AM,Grafana,Loki,Jaeger,MongoExp obs
+    class FlowNote note
