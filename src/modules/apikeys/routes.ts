@@ -37,6 +37,7 @@ export const createApiKeysRouter = (deps: AppDeps, auth: RequestHandler): Router
             apiKey: created.apiKey,
             keyShownOnce: true,
             expiresAt: created.expiresAt ? created.expiresAt.toISOString() : null,
+            lastUsedAt: null,
           },
           self: '/v1/api-keys',
           limit: 1,

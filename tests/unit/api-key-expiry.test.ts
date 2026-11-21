@@ -22,6 +22,18 @@ const fakeCollection = <T extends { _id: string }>(initial: T[] = []) => {
     insertOne: async (doc: T): Promise<void> => {
       rows.push(doc);
     },
+    updateOne: async (
+      filter: Record<string, unknown>,
+      update: Record<string, unknown>,
+    ): Promise<{ modifiedCount: number }> => {
+      const row = rows.find((candidate) =>
+        matches(candidate as unknown as Record<string, unknown>, filter),
+      );
+      if (!row) return { modifiedCount: 0 };
+      const set = update.$set as Record<string, unknown> | undefined;
+      if (set) Object.assign(row, set);
+      return { modifiedCount: 1 };
+    },
   };
 };
 

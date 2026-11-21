@@ -276,6 +276,7 @@ export const createApiKey = async (input: {
     createdAt: new Date(),
     revokedAt: null,
     expiresAt,
+    lastUsedAt: null,
   };
   await input.collections.apiKeys.insertOne(doc);
   return { id: doc._id, apiKey: raw, prefix, expiresAt };

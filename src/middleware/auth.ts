@@ -41,6 +41,9 @@ export const createAuthMiddleware = (deps: AuthDeps): RequestHandler => {
         }
         const owner = await deps.collections.users.findOne({ _id: record.ownerId });
         if (!owner) throw unauthorized('API key owner no longer exists');
+        void deps.collections.apiKeys
+          .updateOne({ _id: record._id }, { $set: { lastUsedAt: new Date() } })
+          .catch(() => undefined);
         req.principal = { id: owner._id, role: owner.role, via: 'api-key' };
         next();
         return;
