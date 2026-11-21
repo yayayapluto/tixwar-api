@@ -14,7 +14,16 @@ export const registerSchema = z
 
 export const loginSchema = z
   .object({
-    email: z.string().trim().toLowerCase().email().max(254),
+    // The login identifier is an email address, except the literal "admin",
+    // which is an alias for the seeded admin account (see routes.ts).
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .max(254)
+      .refine((v) => v === 'admin' || z.string().email().safeParse(v).success, {
+        message: 'must be a valid email address or "admin"',
+      }),
     password: z.string().min(1).max(128),
   })
   .strict();

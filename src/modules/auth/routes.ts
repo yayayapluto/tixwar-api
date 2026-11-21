@@ -78,10 +78,15 @@ export const createAuthRouter = (deps: AppDeps): Router => {
           throw unauthorized('Account temporarily locked due to repeated failed logins');
         }
 
-        const user = await deps.collections.users.findOne({
-          email: body.email,
-          deletedAt: null,
-        });
+        // The literal identifier "admin" is an alias for the seeded admin
+        // account, so the admin can log in without typing the full email.
+        const user =
+          body.email === 'admin'
+            ? await deps.collections.users.findOne({ role: 'admin', deletedAt: null })
+            : await deps.collections.users.findOne({
+                email: body.email,
+                deletedAt: null,
+              });
         const valid = user ? await verifyPassword(body.password, user.passwordHash) : false;
         if (!user || !valid) {
           const failures = await deps.redis.incr(`login:fail:${clientIp(req)}:${body.email}`);

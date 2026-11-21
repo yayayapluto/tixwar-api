@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
 
     faker.seed(20240101);
     const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@tixwar.local';
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'TixWar-Admin-2024';
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin123';
     const admin = await createUser({
       collections,
       email: adminEmail,
