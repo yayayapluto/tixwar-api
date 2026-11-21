@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { EventDoc } from '../../src/infra/db/types.ts';
 import {
   assertSafeFilterKeys,
   buildEventFilter,
@@ -6,6 +7,7 @@ import {
   buildProjection,
   normalizeCacheQuery,
   pickFields,
+  serializeEventWithPrice,
 } from '../../src/modules/events/query.ts';
 import { hashRequest, stableStringify } from '../../src/shared/hash.ts';
 import { AppError } from '../../src/shared/problem.ts';
@@ -76,5 +78,42 @@ describe('cache key normalization', () => {
 
   it('stable stringify sorts object keys deterministically', () => {
     expect(stableStringify({ b: 1, a: 2 })).toBe(stableStringify({ a: 2, b: 1 }));
+  });
+});
+
+describe('event list price range', () => {
+  const doc: EventDoc = {
+    _id: 'evt_1',
+    name: 'Jazz Night',
+    description: 'An evening of jazz',
+    category: 'music',
+    city: 'jakarta',
+    venue: 'Hall A',
+    startsAt: new Date('2026-03-01T19:00:00.000Z'),
+    status: 'ON_SALE',
+    searchText: 'jazz night an evening of jazz',
+    createdBy: 'usr_1',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    deletedAt: null,
+  };
+
+  it('exposes null prices for events without tiers', () => {
+    const serialized = serializeEventWithPrice(doc);
+    expect(serialized.minPrice).toBeNull();
+    expect(serialized.maxPrice).toBeNull();
+  });
+
+  it('exposes the tier price range when tiers exist', () => {
+    const serialized = serializeEventWithPrice(doc, { minPrice: 150000, maxPrice: 500000 });
+    expect(serialized.minPrice).toBe(150000);
+    expect(serialized.maxPrice).toBe(500000);
+  });
+
+  it('keeps the base event fields intact', () => {
+    const serialized = serializeEventWithPrice(doc, { minPrice: 100000, maxPrice: 100000 });
+    expect(serialized.id).toBe('evt_1');
+    expect(serialized.name).toBe('Jazz Night');
+    expect(serialized.status).toBe('ON_SALE');
   });
 });

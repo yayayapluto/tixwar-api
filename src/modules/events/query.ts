@@ -93,6 +93,20 @@ export const serializeEvent = (doc: EventDoc): Record<string, unknown> => ({
   updatedAt: doc.updatedAt.toISOString(),
 });
 
+export interface EventPriceRange {
+  minPrice: number | null;
+  maxPrice: number | null;
+}
+
+export const serializeEventWithPrice = (
+  doc: EventDoc,
+  price?: EventPriceRange,
+): Record<string, unknown> => ({
+  ...serializeEvent(doc),
+  minPrice: price?.minPrice ?? null,
+  maxPrice: price?.maxPrice ?? null,
+});
+
 export const pickFields = (
   serialized: Record<string, unknown>,
   fields?: string[],

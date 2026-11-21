@@ -23,6 +23,7 @@ import {
   chaosStateSchema,
   eventCreateResultSchema,
   eventDetailSchema,
+  eventListItemSchema,
   eventPatchResultSchema,
   eventSchema,
   eventStatsSchema,
@@ -180,6 +181,7 @@ const responseComponents = {
   RefreshResult: toJson(refreshResultSchema),
   Event: toJson(eventSchema),
   EventDetail: toJson(eventDetailSchema),
+  EventListItem: toJson(eventListItemSchema),
   TicketTier: toJson(tierModelSchema),
   EventCreateResult: toJson(eventCreateResultSchema),
   EventPatchResult: toJson(eventPatchResultSchema),
@@ -335,7 +337,10 @@ export const buildOpenApiDocument = (): Record<string, unknown> => ({
           },
         ],
         responses: {
-          200: jsonResponse('Event list', envelopeOf({ type: 'array', items: ref('Event') })),
+          200: jsonResponse(
+            'Event list',
+            envelopeOf({ type: 'array', items: ref('EventListItem') }),
+          ),
           ...problemResponses([400, 429]),
         },
       },
