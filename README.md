@@ -11,7 +11,7 @@ Stack: **Bun** + **TypeScript strict**, **Express 5**, **MongoDB 7 native sharde
 ## Final Project — Trial Study Club Veterantech
 
 - **Nama:** Muhammad Farras Ashshiddiqi
-- **NIM:** _belum diisi_
+- **NIM:** 2610511057
 - **Judul proyek:** TixWar — Flash Sale Ticketing API
 - **Repository API:** https://github.com/yayayapluto/tixwar-api
 - **Repository Web (demo only):** https://github.com/yayayapluto/tixwar-web
