@@ -15,7 +15,7 @@ Stack: **Bun** + **TypeScript strict**, **Express 5**, **MongoDB 7 native sharde
 - **Judul proyek:** TixWar — Flash Sale Ticketing API
 - **Repository API:** https://github.com/yayayapluto/tixwar-api
 - **Repository Web (demo only):** https://github.com/yayayapluto/tixwar-web
-- **Presentasi:** `docs/final-project-presentation.pdf` (5 slide)
+- **Presentasi:** `docs/presentation/final-project-presentation.pdf` (5 slide)
 - **Instalasi:** lihat [Prasyarat](#prasyarat) dan [Quickstart](#quickstart)
 - **Menjalankan server:** `cp .env.example .env`, lalu `just up`, `just migrate`, `just seed` (detil di [Quickstart](#quickstart))
 - **Environment variables:** lihat [Daftar environment](#daftar-environment) dan `.env.example`
@@ -55,9 +55,9 @@ Alur inti satu pembelian:
 
 Redis adalah _atomic stock gate_; MongoDB adalah catatan durable. Detil lengkap: `docs/architecture.md`. Keputusan yang menyimpang dari PRD: `docs/adr/`.
 
-![TixWar API Architecture](assets/tixwar-api-architecture.png)
+![TixWar API Architecture](docs/diagrams/tixwar-api-architecture.png)
 
-Architecture diagram source (Mermaid): [`docs/tixwar-api-architecture.mmd`](docs/tixwar-api-architecture.mmd).
+Architecture diagram source (Mermaid): [`docs/diagrams/tixwar-api-architecture.mmd`](docs/diagrams/tixwar-api-architecture.mmd).
 
 ---
 
@@ -266,7 +266,8 @@ Catatan integrasi frontend:
 
 - `docs/architecture.md` — komponen, order + stok Lua, outbox + saga, sharding, cache, rate limit, observability, read model, feature flags.
 - `docs/runbook.md` — operasi harian, recovery, chaos Redis/Mongo, DLQ, reshard, dan late payment.
-- `docs/demo-script.md` — naskah demo presentasi.
+- `docs/presentation/` — deck final project, pitch deck lama, naskah demo, dan laporan.
+- `docs/diagrams/` — diagram arsitektur (Mermaid + PNG).
 - `docs/adr/` — Architecture Decision Records, termasuk keputusan OTel/BullMQ.
 - `docs/benchmarks/` — hasil load test nyata sebelum/sesudah cache.
 - `docs/postman/` — koleksi request Postman (auth, events, orders, pay, SSE, API key).
