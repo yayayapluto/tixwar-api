@@ -8,6 +8,33 @@ Stack: **Bun** + **TypeScript strict**, **Express 5**, **MongoDB 7 native sharde
 
 ---
 
+## Final Project — Trial Study Club Veterantech
+
+- **Nama:** Muhammad Farras Ashshiddiqi
+- **NIM:** _belum diisi_
+- **Judul proyek:** TixWar — Flash Sale Ticketing API
+- **Repository API:** https://github.com/yayayapluto/tixwar-api
+- **Repository Web (demo only):** https://github.com/yayayapluto/tixwar-web
+- **Presentasi:** `docs/final-project-presentation.pdf` (5 slide)
+- **Instalasi:** lihat [Prasyarat](#prasyarat) dan [Quickstart](#quickstart)
+- **Menjalankan server:** `cp .env.example .env`, lalu `just up`, `just migrate`, `just seed` (detil di [Quickstart](#quickstart))
+- **Environment variables:** lihat [Daftar environment](#daftar-environment) dan `.env.example`
+- **Koleksi Postman:** `docs/postman/tixwar.postman_collection.json`
+- **Dokumentasi API:** `docs/openapi.json` dan Swagger UI di `http://localhost:8080/docs`
+
+### Daftar endpoint
+
+35 operasi di 28 path (GET 16, POST 15, PATCH 1, DELETE 3, tanpa PUT):
+
+- **Auth:** `POST /v1/auth/register`, `POST /v1/auth/login`, `POST /v1/auth/refresh`, `POST /v1/auth/logout`, `POST /v1/auth/forgot-password`, `POST /v1/auth/reset-password`
+- **Events:** `GET /v1/events`, `POST /v1/events`, `GET /v1/events/:id`, `PATCH /v1/events/:id`, `DELETE /v1/events/:id`, `GET /v1/events/:id/stats`, `GET /v1/events/:id/stream`, `POST /v1/events/:id/tiers/bulk`
+- **Orders:** `GET /v1/orders`, `POST /v1/orders`, `GET /v1/orders/:id`, `POST /v1/orders/:id/cancel`, `POST /v1/orders/:id/pay`, `GET /v1/orders/:id/stream`
+- **Tickets:** `GET /v1/tickets`, `GET /v1/tickets/:id`
+- **API keys dan webhooks:** `GET /v1/api-keys`, `POST /v1/api-keys`, `DELETE /v1/api-keys/:id`, `GET /v1/webhooks/endpoints`, `POST /v1/webhooks/endpoints`, `DELETE /v1/webhooks/endpoints/:id`
+- **Health dan debug:** `GET /health`, `GET /ready`, `GET /metrics`, `GET /debug/stream`, `POST /debug/load`, `GET /debug/chaos`, `POST /debug/chaos`
+
+---
+
 ## Arsitektur singkat
 
 Proses yang berjalan (modular monolith, bukan microservices):
